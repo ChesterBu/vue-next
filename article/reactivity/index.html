@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+    <script>
+        let data = [1,2,3]
+        let p = new Proxy(data, {
+            get(target, key, receiver) {
+                console.log('get value:', key)
+                return target[key]
+            },
+            set(target, key, value, receiver) {
+                console.log('set value:', key, value)
+                target[key] = value
+                return true
+            }
+        })
+        //p.push(1)
+        p.shift()
+        // console.log(data)   // [1, 2, 3, empty]
+        // function defineReactive(data, key, val) {
+        //     Object.defineProperty(data, key, {
+        //         enumerable: true,
+        //         configurable: true,
+        //         get() {
+        //             console.log(`get key: ${key} val: ${val}`)
+        //             return val
+        //         },
+        //         set(newVal) {
+        //             console.log(`set key: ${key} val: ${newVal}`)
+        //             val = newVal
+        //         }
+        //     })
+        // }
+        // function observe(data) {
+        //     Object.keys(data).forEach((key)=> {
+        //         defineReactive(data, key, data[key])
+        //     })
+        // }
+        // let test = [1, 2, 3]
+        // observe(test)
+        // console.log(test[1])   // get key: 1 val: 2
+        // test[1] = 2       // set key: 1 val: 2
+        // test.length = 1   // 操作是完成的但是没有log
+        // console.log(test.length) // [(...)] 
+                          //    0: 1
+                          //    length: 1
+                          //    get 0: ƒ get()
+                          //    set 0: ƒ set(newVal)
+                          //    __proto__: Array(0)
+    </script>
+</body>
+</html>
