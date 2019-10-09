@@ -8,32 +8,49 @@
 </head>
 <body>
     <script>
-        let data = {a:1,b:{c:'c'},d:[1,2,3]}
-        let p = new Proxy(data, {
+    const hasOwn = (val,key)=>{
+        const res = Object.prototype.hasOwnProperty.call(val, key)
+        //console.log(val,key,res)
+        return res
+    } 
+    function reactive(data){
+        return new Proxy(data, {
             get(target, key, receiver) {
-                console.log('get value:', key)
                 const res = Reflect.get(target, key, receiver)
+                console.log(res)
                 return res
             },
             set(target, key, value, receiver) {
-                console.log('set value:', key, value)
-                // 如果赋值成功，则返回true
+                const hadKey = hasOwn(target, key)
+                const oldValue = target[key]
                 const res = Reflect.set(target, key, value, receiver)
+                if (!hadKey) {
+                    console.log('set value:ADD', key, value)
+                } else if (value !== oldValue) {
+                    console.log('set value:SET', key, value)
+                } 
+                return res
+            },
+            deleteProperty(target, key){
+                const hadKey = hasOwn(target, key)
+                const oldValue = target[key]
+                const res = Reflect.deleteProperty(target, key)
+                if (hadKey) {
+                    console.log('set value:DELETE', key)
+                }
                 return res
             }
         })
-        console.log(p.a)
-        console.log(p.b.c)
-        console.log(p.d)
-        console.log(p.d[0])
-        // get value: a
-        // 1
-        // get value: b
-        // c
-        // get value: d
-        // [1, 2, 3]
-        // get value: d
-        // 1
+    }
+        let data = {a:1,b:{c:'c'}}
+        // let data = ([1,2,3]
+        let p = reactive(data)
+        //p.push(1)
+        //p.unshift(1)
+        // p.pop()
+        //p.splice(0,0,2)
+        p.b
+        
     </script>
 </body>
 </html>
