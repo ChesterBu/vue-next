@@ -18,56 +18,55 @@
 
 同样对于对象，由于defineProperty的局限性，Vue2是不能检测对象属性的添加或删除的。
 ```js
-    function defineReactive(data, key, val) {
-        Object.defineProperty(data, key, {
-            enumerable: true,
-            configurable: true,
-            get() {
-                console.log(`get key: ${key} val: ${val}`)
-                return val
-            },
-            set(newVal) {
-                console.log(`set key: ${key} val: ${newVal}`)
-                val = newVal
-            }
-        })
-    }
-    function observe(data) {
-        Object.keys(data).forEach((key)=> {
-            defineReactive(data, key, data[key])
-        })
-    }
-    let test = [1, 2, 3]
-    observe(test)
-    console.log(test[1])   // get key: 1 val: 2
-    test[1] = 2       // set key: 1 val: 2
-    test.length = 1   // 操作是完成的,但是没有触发set
-    console.log(test.length) // 输出1，但是也没有触发get
-```
-
-## Proxy
-相对于defineProperty，Proxy无疑更加强大，可以代理数组，并且提供了多种属性访问的方法traps。
-
-```js
-    let data = [1,2,3]
-    let p = new Proxy(data, {
-        get(target, key, receiver) {
-            // target 目标对象，这里即data
-            console.log('get value:', key)
-            return target[key]
+function defineReactive(data, key, val) {
+    Object.defineProperty(data, key, {
+        enumerable: true,
+        configurable: true,
+        get() {
+            console.log(`get key: ${key} val: ${val}`)
+            return val
         },
-        set(target, key, value, receiver) {
-            // receiver 最初被调用的对象。通常是proxy本身，但handler的set方法也有可能在原型链上或以其他方式被间接地调用（因此不一定是proxy本身）。
-            // 比如，假设有一段代码执行 obj.name = "jen"，obj不是一个proxy且自身不含name属性，但它的原型链上有一个proxy，那么那个proxy的set拦截函数会被调用，此时obj会作为receiver参数传进来。
-            console.log('set value:', key, value)
-            target[key] = value
-            return true // 在严格模式下，若set方法返回false，则会抛出一个 TypeError 异常。
+        set(newVal) {
+            console.log(`set key: ${key} val: ${newVal}`)
+            val = newVal
         }
     })
-    p.length = 4   // set value: length 4
-    console.log(data)   // [1, 2, 3, empty]
+}
+function observe(data) {
+    Object.keys(data).forEach((key)=> {
+        defineReactive(data, key, data[key])
+    })
+}
+let test = [1, 2, 3]
+observe(test)
+console.log(test[1])   // get key: 1 val: 2
+test[1] = 2       // set key: 1 val: 2
+test.length = 1   // 操作是完成的,但是没有触发set
+console.log(test.length) // 输出1，但是也没有触发get
 ```
-但是对于数组的一次操作可能会触发多次get/set,主要原因自然是改变数组的内部key的数量了（即对数组进行插入删除key之类的操作），导致的连锁反应。
+
+## Proxy的一些细节
+相对于defineProperty，Proxy无疑更加强大，可以代理数组，并且提供了多种属性访问的方法traps(get,set,has,deleteProperty等等)。
+```js
+let data = [1,2,3]
+let p = new Proxy(data, {
+    get(target, key, receiver) {
+        // target 目标对象，这里即data
+        console.log('get value:', key)
+        return target[key]
+    },
+    set(target, key, value, receiver) {
+        // receiver 最初被调用的对象。通常是proxy本身，但handler的set方法也有可能在原型链上或以其他方式被间接地调用（因此不一定是proxy本身）。
+        // 比如，假设有一段代码执行 obj.name = "jen"，obj不是一个proxy且自身不含name属性，但它的原型链上有一个proxy，那么那个proxy的set拦截函数会被调用，此时obj会作为receiver参数传进来。
+        console.log('set value:', key, value)
+        target[key] = value
+        return true // 在严格模式下，若set方法返回false，则会抛出一个 TypeError 异常。
+    }
+})
+p.length = 4   // set value: length 4
+console.log(data)   // [1, 2, 3, empty]
+```
+但是对于数组的一次操作可能会触发多次get/set,主要原因自然是改变数组的内部key的数量了(即对数组进行插入删除key之类的操作),导致的连锁反应。
 ```js
 // data : [1,2,3]
 p.push(1)
@@ -86,5 +85,43 @@ p.shift()
 // set value: 1 3
 // set value: length 2
 ```
-同时Proxy也是仅代理一层的
+同时Proxy是仅代理一层的，对于深层对象，也是需要开发者自行实现的。
+```js
+let data = {a:1,b:{c:'c'},d:[1,2,3]}
+let p = new Proxy(data, {
+    ....同上
+})
+console.log(p.a)
+console.log(p.b.c)
+console.log(p.d)
+console.log(p.d[0])
+// get value: a
+// 1
+// get value: b
+// c
+// get value: d
+// [1, 2, 3]
+// get value: d
+// 1
+```
+还有一件事，对于一些简单的get/set操作，我们在traps中使用`target[key]`，`target[key] = value`是可以达到我们的需求的，但是对于一些复杂的如delet，in这类操作这样实现就不够优雅了，而ES6提供了[Reflect](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Reflect)API,且与Proxy的traps一一对应。所以我们先将之前的代码改造一下:
+
+```js
+let p = new Proxy(data, {
+    get(target, key, receiver) {
+        console.log('get value:', key)
+        const res = Reflect.get(target, key, receiver)
+        return res
+    },
+    set(target, key, value, receiver) {
+        console.log('set value:', key, value)
+        // 如果赋值成功，则返回true
+        const res = Reflect.set(target, key, value, receiver)
+        return res
+    }
+})
+```
+## 实现响应式
+
+
 
