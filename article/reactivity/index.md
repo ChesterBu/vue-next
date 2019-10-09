@@ -131,11 +131,11 @@ let p = new Proxy(data, {
 ### 明确实现的效果
 
 ```js
-const value = reactive({ num: 0 })
+const a = reactive({ b: 0 })
 effect(() => {
-  console.log(value.num)
-})
-value.num = 7 // 这时会打印 7
+    console.log(a.b)
+})  //effect在传入时就会自动执行一次
+a.b ++ // 这时会打印 1
 
 const list = reactive([1,2])
 effect(() => {
@@ -144,7 +144,9 @@ effect(() => {
 list.push(3) 
 // 这时会打印 [1,2,3]
 ```
-### 第一步，我们先来简单实现一个可以对对象增删改查侦测的函数
+### reactivity的实现
+
+第一步，我们先来简单实现一个可以对对象增删改查侦测的函数
 
 在set的实现中，我们将对象的set分为两类：新增key和更改key的value。通过hasOwnProperty判断这个对象是否含有这个属性，不存在存在则是添加属性，存在则判断新value和旧value是否相同，不同才需要触发log执行。
 
@@ -185,15 +187,11 @@ function reactive(data){
     })
 }
 ```
-### 深层监听
+
+#### 深层监听
 
 
-
-
-
-
-
-### 解决多次trigger的问题
+#### 多次trigger的问题
 
 但对于数组进行一些操作时，执行起来会有一点小不同,我们来监听一个数组`p = reactive([1,2,3])`,并分别对p进行操作看看结果:
 
@@ -224,10 +222,114 @@ delete p[0]
 // set value:DELETE 0
 // 这里p的length依然是三
 ```
-可以发现当我们对数组添加元素时，对于length的SET并不会触发(),而删除元素时才会触发length的SET,同时对数组的一次操作触发了多次log，接下来我们来解决这些:
+可以发现当我们对数组添加元素时，对于length的SET并不会触发(),而删除元素时才会触发length的SET,同时对数组的一次操作触发了多次log。
 
 
 
 
+
+#### 依赖收集
+
+针对每个监听的对象，建立关系表targetMap,key为target，value为另一张关系表depsMap。
+depsMap的key为target的每个key，value为由effect函数传入的参数的Set集。
+```ts
+type Dep = Set<ReactiveEffect>
+type KeyToDepMap = Map<string | symbol, Dep>
+const targetMap = new WeakMap<any, KeyToDepMap>()
+// 大概结构如下所示
+//    target | depsMap
+//    origin |   key  |  Dep 
+//               k1   |  effect1,effect2...
+//               k2   |  effect3,effect4...
+```
+同时我们还需要收集effect函数中传入的回调函数，这里使用一个数组记录:
+```ts
+const activeReactiveEffectStack: ReactiveEffect[] = []
+```
+接下来实现这部份，首先来看effect函数的实现:
+```js
+function run(effect,fn,args){
+    try {
+        activeReactiveEffectStack.push(effect)
+        return fn(...args)   //执行fn以收集依赖
+    } finally {
+        activeReactiveEffectStack.pop()
+    }
+}
+function effect(fn){
+    const effect1 = function (...args){
+        return run(effect1, fn, args)
+    }
+    effect1()
+    return effect1
+}
+```
+改造我们的`reactive`:
+ ```js
+function track(target,type,key){
+    const effect = activeReactiveEffectStack[activeReactiveEffectStack.length - 1]
+    if (effect) {
+        let depsMap = targetMap.get(target)
+        if (depsMap === void 0) {
+            targetMap.set(target, (depsMap = new Map()))
+        }
+        let dep = depsMap.get(key)
+        if (dep === void 0) {
+            depsMap.set(key, (dep = new Set()))
+        }
+        if (!dep.has(effect)) {
+            dep.add(effect)
+        }
+    }
+}
+function trigger(target,type,key){
+    console.log(`set value:${type}`, key)
+    const depsMap = targetMap.get(target)
+    if (depsMap === void 0) {
+        return
+    }
+    // 获取已存在的Dep Set执行
+    const depSet = depsMap.get(key)
+    if (depSet !== void 0) {
+        depSet.forEach(effect => {
+            effect()
+        })
+    }
+}
+function reactive(target){
+    const observed = new Proxy(target, {
+        get(target, key, receiver) {
+            const res = Reflect.get(target, key, receiver)
+            track(target,"GET",key)
+            return res
+        },
+        set(target, key, value, receiver) {
+            const hadKey = hasOwn(target, key)
+            const oldValue = target[key]
+            const res = Reflect.set(target, key, value, receiver)
+            if (!hadKey) {
+                trigger(target,"ADD",key)
+            } else if (value !== oldValue) {
+                trigger(target,"SET",key)
+            } 
+            return res
+        },
+        deleteProperty(target, key){
+            const hadKey = hasOwn(target, key)
+            const oldValue = target[key]
+            const res = Reflect.deleteProperty(target, key)
+            if (hadKey) {
+                console.log('set value:DELETE', key)
+            }
+            return res
+        }
+    })
+    if (!targetMap.has(target)) {
+        targetMap.set(target, new Map())
+    }
+    return observed
+}
+ ```
+ 
 
 
