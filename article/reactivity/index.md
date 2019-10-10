@@ -50,6 +50,7 @@ console.log(test.length) // 输出1，但是也没有触发get
 ## 实现响应式前的一些小细节
 
 相对于defineProperty，Proxy无疑更加强大，可以代理数组，并且提供了多种属性访问的方法traps(get,set,has,deleteProperty等等)。
+
 ```js
 let data = [1,2,3]
 let p = new Proxy(data, {
@@ -161,6 +162,7 @@ a.b ++ // 这时会打印 1
 第一步，我们先来简单实现一个可以对对象增删改查侦测的函数
 在set的实现中，我们将对象的set分为两类：新增key和更改key的value。通过hasOwnProperty判断这个对象是否含有这个属性，不存在存在则是添加属性，存在则判断新value和旧value是否相同，不同才需要触发log执行。
 这里的reactive函数我们记为V1版本。
+
 ```js
 const hasOwn = (val,key)=>{
     const res = Object.prototype.hasOwnProperty.call(val, key)
@@ -198,6 +200,7 @@ function reactive(data){
     })
 }
 ```
+
 ### 依赖收集
 
 在Vue3中针对所有的被监听的对象，存在一张关系表targetMap,key为target，value为另一张关系表depsMap。
@@ -288,7 +291,7 @@ function trigger(target,type,key){
 
 reactive函数如下:
 
- ```js
+```js
 function reactive(target){
     const observed = new Proxy(target, {
         get(target, key, receiver) {
