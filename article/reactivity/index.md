@@ -480,6 +480,7 @@ r.ary.unshift(1)
 //多次打印，证明多次触发
 ```
 可以发现我们的代码和Vue3表现是一致的。
+测试的代码都在这个里面➡️[代码](https://github.com/ChesterBu/vue-next/tree/master/article/reactivity)
 
 ## 总结
 
