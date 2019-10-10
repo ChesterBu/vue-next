@@ -91,7 +91,7 @@ p.shift()
 // set value: length 2
 ```
 
-同时Proxy是仅代理一层的，对于深层对象，也是需要开发者自行实现的，此外对于对象的添加是可以`set`traps侦测到的，删除则需要使用`deleteProperty`traps。
+同时Proxy是仅代理一层的，对于深层对象，也是需要开发者自行实现的，此外对于对象的添加是可以 `set` traps侦测到的，删除则需要使用 `deleteProperty` traps。
 
 ```js
 let data = {a:1,b:{c:'c'},d:[1,2,3]}
@@ -159,7 +159,6 @@ a.b ++ // 这时会打印 1
 ### reactive的简单实现
 
 第一步，我们先来简单实现一个可以对对象增删改查侦测的函数
-
 在set的实现中，我们将对象的set分为两类：新增key和更改key的value。通过hasOwnProperty判断这个对象是否含有这个属性，不存在存在则是添加属性，存在则判断新value和旧value是否相同，不同才需要触发log执行。
 这里的reactive函数我们记为V1版本。
 ```js
