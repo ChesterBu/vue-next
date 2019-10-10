@@ -128,7 +128,9 @@ let p = new Proxy(data, {
 
 ## 实现响应式
 
-### 明确实现的效果
+### 明确目标
+
+我们最终实现的效果应该如下一样:
 
 ```js
 const a = reactive({ b: 0 })
@@ -144,12 +146,22 @@ effect(() => {
 list.push(3) 
 // 这时会打印 [1,2,3]
 ```
-### reactivity的实现
+
+### 实现思路
+
+熟悉Vue2的同学都知道Vue2的响应式是在get中收集依赖,在set中触发依赖,Vue3想必也不例外,按照这个思路我们的实现步骤如下:
+
+1. 在触发get时收集effect函数传入的回调，这里我们称这个回调为ReactiveEffect
+2. 在set、deleteProperty...时触发所有的ReactiveEffect
+
+下面我们看下具体的实现步骤
+
+### reactive的简单实现
 
 第一步，我们先来简单实现一个可以对对象增删改查侦测的函数
 
 在set的实现中，我们将对象的set分为两类：新增key和更改key的value。通过hasOwnProperty判断这个对象是否含有这个属性，不存在存在则是添加属性，存在则判断新value和旧value是否相同，不同才需要触发log执行。
-
+这里的reactive函数我们记为V1版本。
 ```js
 const hasOwn = (val,key)=>{
     const res = Object.prototype.hasOwnProperty.call(val, key)
@@ -187,66 +199,34 @@ function reactive(data){
     })
 }
 ```
+### 依赖收集
 
-#### 深层监听
-
-
-#### 多次trigger的问题
-
-但对于数组进行一些操作时，执行起来会有一点小不同,我们来监听一个数组`p = reactive([1,2,3])`,并分别对p进行操作看看结果:
-
-```js
-p.push(1)
-// set value:ADD 3 1
-p.unshift(1)
-// set value:ADD 3 3
-// set value:SET 2 2
-// set value:SET 1 1
-p.splice(0,0,2)
-// set value:ADD 3 3
-// set value:SET 2 2
-// set value:SET 1 1
-// set value:SET 0 2
-p[3] = 4
-// set value:ADD 3 4
---------
-p,pop()
-// set value:DELETE 2
-// set value:SET length 2
-p.shift()
-// set value:SET 0 2
-// set value:SET 1 3
-// set value:DELETE 2
-// set value:SET length 2
-delete p[0]
-// set value:DELETE 0
-// 这里p的length依然是三
-```
-可以发现当我们对数组添加元素时，对于length的SET并不会触发(),而删除元素时才会触发length的SET,同时对数组的一次操作触发了多次log。
-
-
-
-
-
-#### 依赖收集
-
-针对每个监听的对象，建立关系表targetMap,key为target，value为另一张关系表depsMap。
+在Vue3中针对所有的被监听的对象，存在一张关系表targetMap,key为target，value为另一张关系表depsMap。
 depsMap的key为target的每个key，value为由effect函数传入的参数的Set集。
+
 ```ts
 type Dep = Set<ReactiveEffect>
 type KeyToDepMap = Map<string | symbol, Dep>
 const targetMap = new WeakMap<any, KeyToDepMap>()
 // 大概结构如下所示
 //    target | depsMap
-//    origin |   key  |  Dep 
+//      obj  |   key  |  Dep 
 //               k1   |  effect1,effect2...
 //               k2   |  effect3,effect4...
+//      obj2 |   key  |  Dep 
+//               k1   |  effect1,effect2...
+//               k2   |  effect3,effect4...
+//
 ```
-同时我们还需要收集effect函数中传入的回调函数，这里使用一个数组记录:
+
+同时我们还需要收集effect函数的回调ReactiveEffect,当ReactiveEffect内有已被监听的对象get触发get时，便需要一个存储ReactiveEffect的地方。这里使用一个数组记录:
+
 ```ts
 const activeReactiveEffectStack: ReactiveEffect[] = []
 ```
-接下来实现这部份，首先来看effect函数的实现:
+
+effect函数实现如下:
+
 ```js
 function run(effect,fn,args){
     try {
@@ -256,16 +236,19 @@ function run(effect,fn,args){
         activeReactiveEffectStack.pop()
     }
 }
-function effect(fn){
+function effect(fn,lazy=false){
     const effect1 = function (...args){
         return run(effect1, fn, args)
     }
-    effect1()
+    if (!lazy){
+        effect1()
+    }
     return effect1
 }
 ```
-改造我们的`reactive`:
- ```js
+track跟踪器，由于get时的依赖收集:
+
+```js
 function track(target,type,key){
     const effect = activeReactiveEffectStack[activeReactiveEffectStack.length - 1]
     if (effect) {
@@ -282,6 +265,12 @@ function track(target,type,key){
         }
     }
 }
+
+```
+
+trigger触发器,key变化(set,delete...)时触发,获取这个key所对应的所有的ReactiveEffect,然后执行:
+
+```js
 function trigger(target,type,key){
     console.log(`set value:${type}`, key)
     const depsMap = targetMap.get(target)
@@ -289,13 +278,18 @@ function trigger(target,type,key){
         return
     }
     // 获取已存在的Dep Set执行
-    const depSet = depsMap.get(key)
-    if (depSet !== void 0) {
-        depSet.forEach(effect => {
+    const dep = depsMap.get(key)
+    if (dep !== void 0) {
+        dep.forEach(effect => {
             effect()
         })
     }
 }
+```
+
+reactive函数如下:
+
+ ```js
 function reactive(target){
     const observed = new Proxy(target, {
         get(target, key, receiver) {
@@ -329,7 +323,238 @@ function reactive(target){
     }
     return observed
 }
- ```
+```
+
+### 深层监听
+
+通常我们都会想到通过递归的方式,对每个key判读啊是否为对象来进行监听，在Vue3中:
+
+```js
+function get(target, key, receiver) {
+    const res = Reflect.get(target, key, receiver)
+    track(target, "GET", key)
+    return isObject(res) ? reactive(res) : res
+}
+```
+Vue3中，这里做了性能的优化，做了一层lazy access的操作，这样只有在访问当深层的对象时才会去做代理。
+
+### 注意
+
+此时我们所有的ReactiveEffect都是和key绑定的,也就是说,在ReactiveEffect函数中,我们必须get一次确定的某个key,否则在set时是没有ReactiveEffect可以触发的,举个列子:
+```js
+let data = {a:1,b:{c:'c'}}
+let p = reactive(data)
+effect(()=>{console.log(p)})
+p.a = 3
+```
+这种情况是不会打印p的.
+```js
+let data = {a:1,b:{c:'c'}}
+let p = reactive(data)
+effect(()=>{console.log(p.a)})
+p.a = 3
+```
+这种情况才会执行`()=>{console.log(p.a)`,打印3
+
+### 数组类型的问题
+
+但对于数组进行一些操作时，执行起来会有一点小不同,我们来使用V1版本的reactive函数来监听一个数组`p = reactive([1,2,3])`,并分别对p进行操作看看结果:
+
+```js
+p.push(1)
+// set value:ADD 3 1
+p.unshift(1)
+// set value:ADD 3 3
+// set value:SET 2 2
+// set value:SET 1 1
+p.splice(0,0,2)
+// set value:ADD 3 3
+// set value:SET 2 2
+// set value:SET 1 1
+// set value:SET 0 2
+p[3] = 4
+// set value:ADD 3 4
+--------
+p,pop()
+// set value:DELETE 2
+// set value:SET length 2
+p.shift()
+// set value:SET 0 2
+// set value:SET 1 3
+// set value:DELETE 2
+// set value:SET length 2
+delete p[0]
+// set value:DELETE 0
+// 这里p的length依然是三
+```
+可以发现当我们对数组添加元素时，对于length的SET并不会触发(),而删除元素时才会触发length的SET,同时对数组的一次操作触发了多次log。
+
+这里在我们对数组添加操作时就会出现一个问题，我们使用`p.push(1)`,操作的index是3，上面的列子我们知道在effect函数中我们必须get这个3，才会把ReactiveEffect给绑定上去,但那时候是很没有3这个index的,所以就会导致没有办法执行ReactiveEffect。
+Vue3中的处理是在trigger中添加一段代码:
+```js
+function trigger(target,type,key){
+    console.log(`set value:${type}`, key)
+    const depsMap = targetMap.get(target)
+    if (depsMap === void 0) {
+        return
+    }
+    const effects = new Set()
+    if (key !== void 0) {
+        const depSet = depsMap.get(key)
+        if (depSet !== void 0) {
+            depSet.forEach(effect => {
+                effects.add(effect)
+            })
+        }
+    }
+    // 就是这里啦
+    if (type === "ADD" || type === "DELETE") {
+        if(Array.isArray(target)){
+            const iterationKey = 'length'
+            const depSet = depsMap.get(iterationKey)
+            if (depSet !== void 0) {
+                depSet.forEach(effect => {
+                    effects.add(effect)
+                })
+            }
+        }
+    }
+    // 获取已存在的Dep Set执行
+    effects.forEach(effect=>effect())
+}
+```
+
+当监听的target为数组时,操作为ADD或者DELETE时,触发的ReactiveEffect为绑在数组length上的,看下面一段代码:
+
+```js
+let data = { foo: 'foo', ary: [1, 2, 3] }
+let r = reactive(data)
+effect(()=>console.log(r.ary.length))
+r.ary.unshift(1)  // 4
+```
+
+
+
+### 验证
+
+我们来拿Vue的代码执行一下看一下是否和我们的一样;
+
+
+
+### 完整的代码
+
+```js
+const activeReactiveEffectStack = []
+const targetMap = new WeakMap()
+const isObject = (val) => val !== null && typeof val === 'object'
+const hasOwn = (val,key)=>{
+    const res = Object.prototype.hasOwnProperty.call(val, key)
+    //console.log(val,key,res)
+    return res
+}
+function run(effect,fn,args){
+    try {
+        activeReactiveEffectStack.push(effect)
+        return fn(...args)   //执行fn以收集依赖
+    } finally {
+        activeReactiveEffectStack.pop()
+    }
+}
+function effect(fn,lazy=false){
+    const effect1 = function (...args){
+        return run(effect1, fn, args)
+    }
+    if (!lazy){
+        effect1()
+    }
+    return effect1
+}
+function track(target,type,key){
+    const effect = activeReactiveEffectStack[activeReactiveEffectStack.length - 1]
+    if (effect) {
+        let depsMap = targetMap.get(target)
+        if (depsMap === void 0) {
+            targetMap.set(target, (depsMap = new Map()))
+        }
+        let dep = depsMap.get(key)
+        if (dep === void 0) {
+            depsMap.set(key, (dep = new Set()))
+        }
+        if (!dep.has(effect)) {
+            console.log(key,effect)
+            dep.add(effect)
+        }
+    }
+}
+function trigger(target,type,key){
+    console.log(`set value:${type}`, key)
+    const depsMap = targetMap.get(target)
+    if (depsMap === void 0) {
+        return
+    }
+    const effects = new Set()
+    if (key !== void 0) {
+        const depSet = depsMap.get(key)
+        if (depSet !== void 0) {
+            depSet.forEach(effect => {
+                effects.add(effect)
+            })
+        }
+    }
+    if (type === "ADD" || type === "DELETE") {
+        if(Array.isArray(target)){
+            const iterationKey = 'length'
+            const depSet = depsMap.get(iterationKey)
+            if (depSet !== void 0) {
+                depSet.forEach(effect => {
+                    effects.add(effect)
+                })
+            }
+        }
+    }
+    // 获取已存在的Dep Set执行
+    effects.forEach(effect=>effect())
+}
+function reactive(target){
+    const observed = new Proxy(target, {
+        get(target, key, receiver) {
+            const res = Reflect.get(target, key, receiver)
+            track(target,"GET",key)
+            return isObject(res) ? reactive(res): res
+        },
+        set(target, key, value, receiver) {
+            const hadKey = hasOwn(target, key)
+            const oldValue = target[key]
+            const res = Reflect.set(target, key, value, receiver)
+            if (!hadKey) {
+                trigger(target,"ADD",key)
+            } else if (value !== oldValue) {
+                trigger(target,"SET",key)
+            }
+            return res
+        },
+        deleteProperty(target, key){
+            const hadKey = hasOwn(target, key)
+            const oldValue = target[key]
+            const res = Reflect.deleteProperty(target, key)
+            if (hadKey) {
+                console.log('set value:DELETE', key)
+            }
+            return res
+        }
+    })
+    if (!targetMap.has(target)) {
+        targetMap.set(target, new Map())
+    }
+    return observed
+}
+```
+
+
+
+
+
+
  
 
 

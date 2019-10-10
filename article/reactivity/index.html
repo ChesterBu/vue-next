@@ -19,16 +19,18 @@
     function run(effect,fn,args){
         try {
             activeReactiveEffectStack.push(effect)
-            return fn(...args)
+            return fn(...args)   //执行fn以收集依赖
         } finally {
             activeReactiveEffectStack.pop()
         }
     }
-    function effect(fn){
+    function effect(fn,lazy=false){
         const effect1 = function (...args){
             return run(effect1, fn, args)
         }
-        effect1()
+        if (!lazy){
+            effect1()
+        }
         return effect1
     }
     function track(target,type,key){
@@ -43,6 +45,7 @@
                 depsMap.set(key, (dep = new Set()))
             }
             if (!dep.has(effect)) {
+                console.log(key,effect)
                 dep.add(effect)
             }
         }
@@ -53,13 +56,28 @@
         if (depsMap === void 0) {
             return
         }
-        // 获取已存在的Dep Set执行
-        const depSet = depsMap.get(key)
-        if (depSet !== void 0) {
-            depSet.forEach(effect => {
-                effect()
-            })
+        const effects = new Set()
+        if (key !== void 0) {
+            const depSet = depsMap.get(key)
+            if (depSet !== void 0) {
+                depSet.forEach(effect => {
+                    effects.add(effect)
+                })
+            }
         }
+        if (type === "ADD" || type === "DELETE") {
+            if(Array.isArray(target)){
+                const iterationKey = 'length'
+                const depSet = depsMap.get(iterationKey)
+                if (depSet !== void 0) {
+                    depSet.forEach(effect => {
+                        effects.add(effect)
+                    })
+                }
+            }
+        }
+        // 获取已存在的Dep Set执行
+        effects.forEach(effect=>effect())
     }
     function reactive(target){
         const observed = new Proxy(target, {
@@ -76,7 +94,7 @@
                     trigger(target,"ADD",key)
                 } else if (value !== oldValue) {
                     trigger(target,"SET",key)
-                } 
+                }
                 return res
             },
             deleteProperty(target, key){
@@ -94,17 +112,69 @@
         }
         return observed
     }
-        let data = {a:1,b:{c:'c'}}
-        // let data = ([1,2,3]
-        let p = reactive(data)
-        effect(()=>{console.log(p.a)})
-        p.a = 3
-        //p.push(1)
+        //let data = {a:1,b:{c:'c'}}
+        // let data = [1,2,3]
+        // let p = reactive(data)
+        // effect(()=>{console.log(p)})
+        // p[0] = 3
+        let data = { foo: 'foo', ary: [1, 2, 3] }
+        let r = reactive(data)
+        effect(()=>console.log(r.ary.length))
+        r.ary.unshift(1)
+        // let dummy
+        // let list = reactive(['Hello'])
+        // // dummy = list.join(' ')
+        // effect(() => (dummy = list[0]))
+        // list.unshift('World!')
+        // console.log(dummy)
         //p.unshift(1)
         // p.pop()
         //p.splice(0,0,2)
-        p.b
         
-    </script>
+    </script> 
+    <!-- <script>
+    const hasOwn = (val,key)=>{
+        const res = Object.prototype.hasOwnProperty.call(val, key)
+        console.log(val,key,res)
+        return res
+    } 
+
+    function reactive(data){
+        let i = 0
+        return new Proxy(data, {
+            get(target, key, receiver) {
+                console.log('get value:', key)
+                const res = Reflect.get(target, key, receiver)
+                return res
+            },
+            set(target, key, value, receiver) {
+                console.log(i++)
+                const hadKey = hasOwn(target, key)
+                const oldValue = target[key]
+                const res = Reflect.set(target, key, value, receiver) 
+                if (!hadKey) {
+                    console.log('set value:ADD', key, value)
+                } else if (value !== oldValue) {
+                    console.log('set value:SET', key, value)
+                } else if(key === "length"){
+                    console.log('set length value', key, value)
+                }
+                return res
+            },
+            deleteProperty(target, key){
+                const hadKey = hasOwn(target, key)
+                const oldValue = target[key]
+                const res = Reflect.deleteProperty(target, key)
+                if (hadKey) {
+                    console.log('set value:DELETE', key)
+                }
+                return res
+            }
+        })
+    }
+    let p = reactive([1,2,3])
+    p.push(1)
+    
+    </script> -->
 </body>
 </html>
