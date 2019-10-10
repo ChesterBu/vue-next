@@ -117,9 +117,14 @@
         // let p = reactive(data)
         // effect(()=>{console.log(p)})
         // p[0] = 3
+        // let data = { foo: 'foo', ary: [1, 2, 3] }
+        // let r = reactive(data)
+        // effect(()=>console.log(r.foo))
+        // r.foo =1
+        //const {reactive,effect} = VueObserver
         let data = { foo: 'foo', ary: [1, 2, 3] }
         let r = reactive(data)
-        effect(()=>console.log(r.ary.length))
+        effect(()=>console.log(r.ary.join()))
         r.ary.unshift(1)
         // let dummy
         // let list = reactive(['Hello'])

@@ -2,6 +2,7 @@
 
 请在此前阅读[Vue Composition API](https://vue-composition-api-rfc.netlify.com/)内容，熟悉一下api。
 
+
 ## 实现响应式的方式
 
 1. [defineProperty](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty)
@@ -17,6 +18,7 @@
 2. defineProperty不能检测到数组长度的变化，准确的说是通过改变length而增加的长度不能监测到(`arr.length = newLength`也不会)。
 
 同样对于对象，由于defineProperty的局限性，Vue2是不能检测对象属性的添加或删除的。
+
 ```js
 function defineReactive(data, key, val) {
     Object.defineProperty(data, key, {
@@ -67,7 +69,9 @@ let p = new Proxy(data, {
 p.length = 4   // set value: length 4
 console.log(data)   // [1, 2, 3, empty]
 ```
+
 但是对于数组的一次操作可能会触发多次get/set,主要原因自然是改变数组的内部key的数量了(即对数组进行插入删除之类的操作),导致的连锁反应。
+
 ```js
 // data : [1,2,3]
 p.push(1)
@@ -86,7 +90,9 @@ p.shift()
 // set value: 1 3
 // set value: length 2
 ```
+
 同时Proxy是仅代理一层的，对于深层对象，也是需要开发者自行实现的，此外对于对象的添加是可以`set`traps侦测到的，删除则需要使用`deleteProperty`traps。
+
 ```js
 let data = {a:1,b:{c:'c'},d:[1,2,3]}
 let p = new Proxy(data, {
@@ -107,6 +113,7 @@ p.e = 'e'  // 这里可以看到给对象添加一个属性也依然可以侦测
 // 1
 // set value: e e
 ```
+
 还有一件事，对于一些简单的get/set操作，我们在traps中使用`target[key]`，`target[key] = value`是可以达到我们的需求的，但是对于一些复杂的如delet，in这类操作这样实现就不够优雅了，而ES6提供了[Reflect](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Reflect)API,且与Proxy的traps一一对应,用来代替 Object 的默认行为。
 所以我们先将之前的代码改造一下:
 
@@ -138,13 +145,6 @@ effect(() => {
     console.log(a.b)
 })  //effect在传入时就会自动执行一次
 a.b ++ // 这时会打印 1
-
-const list = reactive([1,2])
-effect(() => {
-  console.log(list)
-})
-list.push(3) 
-// 这时会打印 [1,2,3]
 ```
 
 ### 实现思路
@@ -336,25 +336,28 @@ function get(target, key, receiver) {
     return isObject(res) ? reactive(res) : res
 }
 ```
-Vue3中，这里做了性能的优化，做了一层lazy access的操作，这样只有在访问当深层的对象时才会去做代理。
+Vue3中，这里做了性能的优化，做了一层lazy access的操作，这样只有在访问到深层的对象时才会去做代理。
 
 ### 注意
 
 此时我们所有的ReactiveEffect都是和key绑定的,也就是说,在ReactiveEffect函数中,我们必须get一次确定的某个key,否则在set时是没有ReactiveEffect可以触发的,举个列子:
+
 ```js
 let data = {a:1,b:{c:'c'}}
 let p = reactive(data)
 effect(()=>{console.log(p)})
-p.a = 3
+p.a = 3 
 ```
-这种情况是不会打印p的.
+上面这种情况是不会打印p的.
+
 ```js
 let data = {a:1,b:{c:'c'}}
 let p = reactive(data)
 effect(()=>{console.log(p.a)})
-p.a = 3
+p.a = 3  // 3
 ```
 这种情况才会执行`()=>{console.log(p.a)`,打印3
+
 
 ### 数组类型的问题
 
@@ -387,10 +390,12 @@ delete p[0]
 // set value:DELETE 0
 // 这里p的length依然是三
 ```
+
 可以发现当我们对数组添加元素时，对于length的SET并不会触发(),而删除元素时才会触发length的SET,同时对数组的一次操作触发了多次log。
 
 这里在我们对数组添加操作时就会出现一个问题，我们使用`p.push(1)`,操作的index是3，上面的列子我们知道在effect函数中我们必须get这个3，才会把ReactiveEffect给绑定上去,但那时候是很没有3这个index的,所以就会导致没有办法执行ReactiveEffect。
 Vue3中的处理是在trigger中添加一段代码:
+
 ```js
 function trigger(target,type,key){
     console.log(`set value:${type}`, key)
@@ -407,7 +412,7 @@ function trigger(target,type,key){
             })
         }
     }
-    // 就是这里啦
+    // 就是这里啦，(这里做了一些更改)
     if (type === "ADD" || type === "DELETE") {
         if(Array.isArray(target)){
             const iterationKey = 'length'
@@ -433,13 +438,52 @@ effect(()=>console.log(r.ary.length))
 r.ary.unshift(1)  // 4
 ```
 
-
-
 ### 验证
 
-我们来拿Vue的代码执行一下看一下是否和我们的一样;
+我们来拿Vue3的代码执行一下看一下是否和我们的一样;
+yarn build 之后引入reactivity.global.js
 
+```js
+const { reactive, effect } = VueObserver
+let data = { foo: 'foo', ary: [1, 2, 3] }
+let r = reactive(data)
+effect(()=>console.log(r.ary.length))
+r.ary.unshift(1)  // 4
+--------------
+const { reactive, effect } = VueObserver
+let data = { foo: 'foo', ary: [1, 2, 3] }
+let r = reactive(data)
+effect(()=>console.log(r.ary))
+r.ary.unshift(1)  // 没有打印
+-------
+const { reactive, effect } = VueObserver
+let data = { foo: 'foo', ary: [1, 2, 3] }
+let r = reactive(data)
+effect(()=>console.log(r))
+r.foo = 1   // 啥也没打印
+--------
+const { reactive, effect } = VueObserver
+let data = { foo: 'foo', ary: [1, 2, 3] }
+let r = reactive(data)
+effect(()=>console.log(r.foo))
+r.foo = 1   // 1
+------
+const { reactive,effect } = VueObserver
+let data = { foo: 'foo', ary: [1, 2, 3] }
+let r = reactive(data)
+effect(()=>console.log(r.ary.join()))
+r.ary.unshift(1)
+// 1,2,3
+// 1,2,3,3
+// 1,2,2,3
+// 1,1,2,3
+//多次打印，证明多次触发
+```
+可以发现我们的代码和Vue3表现是一致的。
 
+## 总结
+
+到此我们应该算是对Vue3中的响应式有一个了解了,第一次写文章哈，如有错误的地方还望雅正
 
 ### 完整的代码
 
@@ -549,12 +593,3 @@ function reactive(target){
     return observed
 }
 ```
-
-
-
-
-
-
- 
-
-
