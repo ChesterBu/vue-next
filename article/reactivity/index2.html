@@ -9,12 +9,54 @@
 <body>
     <script src="./reactivity.global.js"></script>
     <script>
-        const {reactive,effect,ref} = VueObserver
-        const a = ref(0)
-        const b = ref({
-            c:1
-        })
-        console.log(b.value.c)
+        // const {ref,reactive, effect,computed} = VueObserver
+        // const a = ref({c:1})
+        // effect(()=>{
+        //     console.log(a.value.c)
+        //     // console.log(a.value)
+        // })
+        // a.value.c = 2
+        // a.value = {c:3}
+        function computed(getter,setter=()=>{}){
+            return {
+                get value(){
+                    return getter()
+                },
+                set value(newValue){
+                    setter(newValue)
+                }
+            }
+        }
+        let a = 1
+        let b = computed(()=> a+1)
+        console.log(b.value) // 2
+        a = 2
+        console.log(b.value)  // 3
+        let c = computed(()=>b.value+1,(newValue)=>{a=0})
+        c.value = -1
+        console.log(a)  // 0
+        // let obj = {
+        //     a:1,
+        //     b:2
+        // }
+        // let { a, b } = obj
+        // a = 2
+        // let obj = {
+        //         a:1,
+        //         b:2
+        // }
+        // function cc () {
+        //     return { ...obj2 }
+        // }
+        // let {a,b} = cc()
+        // obj2.a = 2
+        // let obj = {
+        //     a:1,
+        //     b:2
+        // }
+        // let { a, b } = obj
+        // a = 2
+        // console.log(obj.a)
         //console.log(a.value);
         // let data = { foo: 'foo', ary: [1, 2, 3] }
         // let r = reactive(data)
