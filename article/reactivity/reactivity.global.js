@@ -578,6 +578,9 @@ var VueObserver = (function (exports) {
   const refSymbol = Symbol( 'refSymbol' );
   const convert = (val) => (isObject(val) ? reactive(val) : val);
   function ref(raw) {
+      if (isRef(raw)) {
+          return raw;
+      }
       raw = convert(raw);
       const v = {
           [refSymbol]: true,
@@ -603,7 +606,7 @@ var VueObserver = (function (exports) {
       return ret;
   }
   function toProxyRef(object, key) {
-      const v = {
+      return {
           [refSymbol]: true,
           get value() {
               return object[key];
@@ -612,7 +615,6 @@ var VueObserver = (function (exports) {
               object[key] = newVal;
           }
       };
-      return v;
   }
 
   function computed(getterOrOptions) {
@@ -691,3 +693,4 @@ var VueObserver = (function (exports) {
   return exports;
 
 }({}));
+//# sourceMappingURL=reactivity.global.js.map

@@ -9,11 +9,17 @@
 <body>
     <script src="./reactivity.global.js"></script>
     <script>
-        const {reactive,effect} = VueObserver
-        let data = { foo: 'foo', ary: [1, 2, 3] }
-        let r = reactive(data)
-        effect(()=>console.log(r.ary.join()))
-        r.ary.unshift(1)
+        const {reactive,effect,ref} = VueObserver
+        const a = ref(0)
+        const b = ref({
+            c:1
+        })
+        console.log(b.value.c)
+        //console.log(a.value);
+        // let data = { foo: 'foo', ary: [1, 2, 3] }
+        // let r = reactive(data)
+        // effect(()=>console.log(r.ary.join()))
+        // r.ary.unshift(1)
     </script>
 </body>
 </html>
