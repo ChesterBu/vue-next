@@ -4,6 +4,8 @@ import { parserOptionsStandard } from './parserOptionsStandard'
 import { transformStyle } from './transforms/transformStyle'
 import { transformCloak } from './transforms/vCloak'
 import { transformVHtml } from './transforms/vHtml'
+import { transformVText } from './transforms/vText'
+import { transformModel } from './transforms/vModel'
 
 export function compile(
   template: string,
@@ -16,6 +18,8 @@ export function compile(
     directiveTransforms: {
       cloak: transformCloak,
       html: transformVHtml,
+      text: transformVText,
+      model: transformModel, // override compiler-core
       ...(options.directiveTransforms || {})
     }
   })

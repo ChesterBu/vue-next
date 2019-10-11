@@ -14,6 +14,7 @@ import { defaultOnError, createCompilerError, ErrorCodes } from './errors'
 import { trackSlotScopes, trackVForSlotScopes } from './transforms/vSlot'
 import { optimizeText } from './transforms/optimizeText'
 import { transformOnce } from './transforms/vOnce'
+import { transformModel } from './transforms/vModel'
 
 export type CompilerOptions = ParserOptions & TransformOptions & CodegenOptions
 
@@ -62,6 +63,7 @@ export function baseCompile(
       on: transformOn,
       bind: transformBind,
       once: transformOnce,
+      model: transformModel,
       ...(options.directiveTransforms || {}) // user transforms
     }
   })
@@ -96,3 +98,9 @@ export {
   createCompilerError
 } from './errors'
 export * from './ast'
+export * from './utils'
+export { registerRuntimeHelpers } from './runtimeHelpers'
+
+// expose transforms so higher-order compilers can import and extend them
+export { transformModel } from './transforms/vModel'
+export { transformOn } from './transforms/vOn'
