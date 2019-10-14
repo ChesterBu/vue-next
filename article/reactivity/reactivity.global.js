@@ -487,7 +487,6 @@ var VueObserver = (function (exports) {
           return;
       }
       const effect = activeReactiveEffectStack[activeReactiveEffectStack.length - 1];
-      console.log("effect",effect,"key",key)
       if (effect) {
           if (type === "iterate" /* ITERATE */) {
               key = ITERATE_KEY;
@@ -531,7 +530,6 @@ var VueObserver = (function (exports) {
       else {
           // schedule runs for SET | ADD | DELETE
           if (key !== void 0) {
-              console.log("depsMap:",depsMap,"key:",key,"dep:",depsMap.get(key))
               addRunners(effects, computedRunners, depsMap.get(key));
           }
           // also run for iteration key on ADD | DELETE

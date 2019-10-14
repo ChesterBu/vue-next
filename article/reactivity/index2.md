@@ -225,75 +225,149 @@ let c = computed(()=>b.value+1,(newValue)=>{a=0})
 c.value = -1
 console.log(a)  // 0
 ```
-好像没什么问题哦？但是(此处应配可达鸭眉头一皱,发现事情并不简单,但是我懒得配。。。)
 
+#### 可以停止的computed
 
-
-## 题外话
-
-在看源码的经常会看到这样的代码:
-```js
-
-if (__dev__){
-  ......
-} else {
-  ......
-}
+上面的实现好像没什么问题哦？但是(此处应配可达鸭眉头一皱,发现事情并不简单,但是我懒得配。。。)
+看一下这个测试用例:
+```ts
+it('should no longer update when stopped', () => {
+  const value = reactive<{ foo?: number }>({})
+  const cValue = computed(() => value.foo)
+  let dummy
+  effect(() => {
+    dummy = cValue.value
+  })
+  expect(dummy).toBe(undefined)
+  value.foo = 1
+  expect(dummy).toBe(1)
+  stop(cValue.effect)
+  value.foo = 2
+  expect(dummy).toBe(1)
+})
 ```
+可以看出在`stop(cValue.effect)`之后,`cValue.value`便不会随着`value.foo`而改变了
 
-例如:
+### trackChildRun
 
+此外,当在effect中使用(get)computed的值时,effect中的ReactiveEffect会获取其中的所有computed的依赖(dep)并将他们挂载到自身的属性上。(具体这么做的原因暂时我还没有发现,因为现在的dep都是从targetMap中获取执行的,应该是在其他包中使用到了,所以在ReactiveEffect自身属性上也挂载了一份)。
 ```js
+let a = reactive({ b: 2,c:3 })
+let b = computed(() => {
+    return a.b
+})
+let c = computed(() => {
+    return a.c
+})
+let dummy
+debugger
+const cc = effect(() => {
+    dummy = b.value+c.value
+})
+debugger
+```
+可以debug看一下上面的代码,就会发现`cc.deps`就是一个由`b.deps`和`c.deps`组成的数组。
+其实看源码会发现computed就是一个特殊的ReactiveEffect。
 
-if (target === toRaw(receiver)) {
-    /* istanbul ignore else */
-  if (__DEV__) {
-    const extraInfo = { oldValue, newValue: value }
-    if (!hadKey) {
-      trigger(target, OperationTypes.ADD, key, extraInfo)
-    } else if (value !== oldValue) {
-      trigger(target, OperationTypes.SET, key, extraInfo)
-    }
-  } else {
-    if (!hadKey) {
-      trigger(target, OperationTypes.ADD, key)
-    } else if (value !== oldValue) {
-      trigger(target, OperationTypes.SET, key)
-    }
+### 被代理的value
+
+看下面这个例子:
+```js
+let a = reactive({ b: 2 })
+let b = computed(() => {
+    return a.b
+})
+let dummy;
+const c = effect(()=>{
+    dummy = b.value
+})
+console.log(dummy) // 2
+a.b = 0
+console.log(dummy) // 0
+```
+按照之前所知道的内容c中的ReactiveEffect执行,应当是b.value改变了,如果b是一个普通reactive对象的话,应该会有一个`b.value = 0`的操作。而computed对象,我们这里是改变了`a.b = 0`,那这是怎么实现的呢？
+我们看下面的代码:
+```js
+function computed(
+  getter
+): any {
+  let dirty = true
+  let value
+  const runner = effect(getter, {
+    lazy: true,
+    computed: true,
+  })
+  return {
+    // expose effect so computed can be stopped
+    effect: runner,
+    get value() {
+      value = runner()
+      return value
+    },
+    
   }
 }
 ```
-
-看到有个[pr](https://github.com/vuejs/vue-next/pull/90)想把它改成:
-
+配合这个例子我们来说明一下:
 ```js
-
-if (target === toRaw(receiver) && (!hadKey || value !== oldValue)) {
-    const operationType = !hadKey ? OperationTypes.ADD : OperationTypes.SET
-    const extraInfo = __DEV__ ? { oldValue, newValue: value } : undefined
-    trigger(target, operationType, key, extraInfo)
+let o = reactive({a:1})
+const f1 = ()=>{
+    console.log(o.a)
 }
-
+const e1 =  effect(f1)
+const f2 = ()=> o.a
+let b = computed(f2)
+const f3 = ()=>{
+    console.log(b.value)
+}
+const e2 = effect(f3)
 ```
-反正我一看没发现什么问题,可是却被closed,为啥嘞?
-给出的原因是是第一种写法其实是故意写成那样可以更好的使用rollup在构建producion时的tree-shaking能力。
-(This is intentionally written like this to utilise tree-shaking abilities of Rollup in production build)
+我们知道f1会在传入effect时被执行一次,而f2会在或取b.value时才会执行。
+而在获取b.value时,会执行上面源码中的runner,runner的内容即是f2,而f2中获取了o.a,此时activeReactiveEffectStack中的ReactiveEffect是e2
+所以e2便会被存入o.a的Dep Set中。
+这样在o.a被set时,e2就会被执行即执行f3.
 
-我们来验证下,第一种方式下打包后看下字节数:
 
+### computed ReactiveEffect执行时机
+
+此外在源码中有这么一段[代码](https://github.com/vuejs/vue-next/blob/master/packages/reactivity/src/effect.ts#L192):
+```js
+// Important: computed effects must be run first so that computed getters
+// can be invalidated before any normal effects that depend on them are run.
+computedRunners.forEach(run)
+effects.forEach(run)
 ```
-wc -c reactivity.global.prod.js
-
-6067 reactivity.global.prod.js
+意思是说在set值时要确保computed相关的ReactiveEffect要先执行,否则就会使依赖这些computed的effects失效。
+来看个具体的例子来感受下吧:
+```js
+let a = reactive({ b: 2 })
+let b = computed(() => {
+    return a.b
+})
+let dummy;
+const c = effect(()=>{
+    dummy = b.value
+})
+console.log(dummy) // 2
+a.b = 0
+console.log(dummy) // 0
+console.log(b.value) // 0
 ```
-
-第二种打包后:
-
+而当我们将Vue3的代码改为
+```js
+effects.forEach(run)
+computedRunners.forEach(run)
 ```
-wc -c reactivity.global.prod.js
-
-7444 reactivity.global.prod.js
+上段代码的执行结果就会变为
+```js
+2
+2
+0
 ```
+这自然就是因为没有先执行更新computed中的ReactiveEffect,而先执行`()=>{dummy = b.value}`,虽然b的值改变了dummy值依然没有改变。
 
-我擦嘞,确实减少了不少啊.
+## 总结
+
+到此我们应该算是对ref与computed的原理有所了解了,结合上篇文章的话那么对于@vue/reactivity的核心实现与使用也应该有个直观的了解了。
+下篇文章计划写一些@vue/reactivity的其他细节,比如ts类型啊这类的。
 

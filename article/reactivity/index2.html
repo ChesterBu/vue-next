@@ -9,7 +9,7 @@
 <body>
     <script src="./reactivity.global.js"></script>
     <script>
-        // const {ref,reactive, effect,computed} = VueObserver
+        const {ref,reactive, effect,computed} = VueObserver
         // const a = ref({c:1})
         // effect(()=>{
         //     console.log(a.value.c)
@@ -17,24 +17,53 @@
         // })
         // a.value.c = 2
         // a.value = {c:3}
-        function computed(getter,setter=()=>{}){
-            return {
-                get value(){
-                    return getter()
-                },
-                set value(newValue){
-                    setter(newValue)
-                }
-            }
+        // function computed(getter,setter=()=>{}){
+        //     return {
+        //         get value(){
+        //             return getter()
+        //         },
+        //         set value(newValue){
+        //             setter(newValue)
+        //         }
+        //     }
+        // }
+        // let a = reactive({ b: 2 })
+        // let b = computed(() => {
+        //     return a.b
+        // })
+        // let dummy;
+        // const c = effect(()=>{
+        //     dummy = b.value
+        // })
+        // console.log(dummy)
+        // a.b = 0
+        // console.log(dummy)
+        // console.log(b.value)
+        let o = reactive({a:1})
+        const f1 = ()=>{
+            console.log('a',o.a)
         }
-        let a = 1
-        let b = computed(()=> a+1)
-        console.log(b.value) // 2
-        a = 2
-        console.log(b.value)  // 3
-        let c = computed(()=>b.value+1,(newValue)=>{a=0})
-        c.value = -1
-        console.log(a)  // 0
+        const e1 =  effect(f1)
+        const f2 = ()=> o.a
+        let b = computed(f2)
+        const f3 = ()=>{
+            console.log('b',b.value)
+        }
+        const e2 = effect(f3)
+        o.a = 2 
+        // debugger
+        // b.value // 2
+        // a.b = 3
+        // debugger
+        // d.value
+        // debugger
+        //console.log(d.value)
+        // debugger
+        // a = 2
+        // console.log(b.value)  // 3
+        // let c = computed(()=>b.value+1,(newValue)=>{a=0})
+        // c.value = -1
+        // console.log(a)  // 0
         // let obj = {
         //     a:1,
         //     b:2
