@@ -211,11 +211,14 @@ export function generate(
         // to provide the helper here.
         if (ast.hoists.length) {
           push(`const _${helperNameMap[CREATE_VNODE]} = Vue.createVNode\n`)
+          if (ast.helpers.includes(COMMENT)) {
+            push(`const _${helperNameMap[COMMENT]} = Vue.Comment\n`)
+          }
         }
       }
     }
     genHoists(ast.hoists, context)
-    context.newline()
+    newline()
     push(`return `)
   } else {
     // generate import statements for helpers
@@ -223,7 +226,7 @@ export function generate(
       push(`import { ${ast.helpers.map(helper).join(', ')} } from "vue"\n`)
     }
     genHoists(ast.hoists, context)
-    context.newline()
+    newline()
     push(`export default `)
   }
 
@@ -484,7 +487,7 @@ function genComment(node: CommentNode, context: CodegenContext) {
   if (__DEV__) {
     const { push, helper } = context
     push(
-      `${helper(CREATE_VNODE)}(${helper(COMMENT)}, 0, ${JSON.stringify(
+      `${helper(CREATE_VNODE)}(${helper(COMMENT)}, null, ${JSON.stringify(
         node.content
       )})`,
       node
