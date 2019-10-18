@@ -12,9 +12,14 @@
     <script>
         const { createApp,ref } = Vue
         const Comp = {
-            template: `<span style='color:red'>{{a}}</span>`,
+            template: `<span style='color:red'>
+                            <a href='//www.baidu.com'>{{a}}</a>
+                        </span>`,
             setup(){
-                const a = ref(1)
+                const a = ref(2)
+                setTimeout(()=>{
+                    a.value = 'baidu'
+                },1000)
                 return {
                     a
                 }
