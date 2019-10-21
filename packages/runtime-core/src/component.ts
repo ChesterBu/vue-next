@@ -13,7 +13,7 @@ import {
   callWithAsyncErrorHandling
 } from './errorHandling'
 import { AppContext, createAppContext, AppConfig } from './apiApp'
-import { Directive } from './directives'
+import { Directive, validateDirectiveName } from './directives'
 import { applyOptions, ComponentOptions } from './apiOptions'
 import {
   EMPTY_OBJ,
@@ -83,7 +83,11 @@ export interface ComponentInternalInstance {
   render: RenderFunction | null
   effects: ReactiveEffect[] | null
   provides: Data
-  accessCache: Data
+  // cache for renderProxy access type to avoid hasOwnProperty calls
+  accessCache: Data | null
+  // cache for render function values that rely on _ctx but won't need updates
+  // after initialized (e.g. inline handlers)
+  renderCache: any[] | null
 
   components: Record<string, Component>
   directives: Record<string, Directive>
@@ -149,6 +153,7 @@ export function createComponentInstance(
     effects: null,
     provides: parent ? parent.provides : Object.create(appContext.provides),
     accessCache: null!,
+    renderCache: null,
 
     // setup context properties
     renderContext: EMPTY_OBJ,
@@ -254,6 +259,12 @@ export function setupStatefulComponent(
       for (let i = 0; i < names.length; i++) {
         const name = names[i]
         validateComponentName(name, instance.appContext.config)
+      }
+    }
+    if (Component.directives) {
+      const names = Object.keys(Component.directives)
+      for (let i = 0; i < names.length; i++) {
+        validateDirectiveName(names[i])
       }
     }
   }

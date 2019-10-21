@@ -101,12 +101,12 @@ const _hoisted_1 = { id: \\"foo\\" }
 
 return function render() {
   with (this) {
-    const { createVNode: _createVNode, applyDirectives: _applyDirectives, resolveDirective: _resolveDirective, createBlock: _createBlock, openBlock: _openBlock } = _Vue
+    const { createVNode: _createVNode, withDirectives: _withDirectives, resolveDirective: _resolveDirective, createBlock: _createBlock, openBlock: _openBlock } = _Vue
     
     const _directive_foo = _resolveDirective(\\"foo\\")
     
     return (_openBlock(), _createBlock(\\"div\\", null, [
-      _applyDirectives(_createVNode(\\"div\\", _hoisted_1, null, 32 /* NEED_PATCH */), [
+      _withDirectives(_createVNode(\\"div\\", _hoisted_1, null, 32 /* NEED_PATCH */), [
         [_directive_foo]
       ])
     ]))
@@ -200,6 +200,22 @@ return function render() {
       _hoisted_1
     ]))
   }
+}"
+`;
+
+exports[`compiler: hoistStatic transform prefixIdentifiers should NOT hoist elements with cached handlers 1`] = `
+"import { createVNode, createBlock, openBlock } from \\"vue\\"
+
+export default function render() {
+  const _ctx = this
+  const _cache = _ctx.$cache
+  return (openBlock(), createBlock(\\"div\\", null, [
+    createVNode(\\"div\\", null, [
+      createVNode(\\"div\\", {
+        onClick: _cache[1] || (_cache[1] = $event => (_ctx.foo($event)))
+      })
+    ])
+  ]))
 }"
 `;
 
