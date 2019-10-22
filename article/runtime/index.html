@@ -12,16 +12,18 @@
     <script>
         const { createApp,ref } = Vue
         const Comp = {
-            template: `<span style='color:red'>
-                            <a href='//www.baidu.com'>{{a}}</a>
-                        </span>`,
+            template: `<button style='color:red' @Click='add'>
+                            {{a}}
+                        </button>`,
             setup(){
                 const a = ref(2)
-                setTimeout(()=>{
-                    a.value = 'baidu'
-                },1000)
+                function add (){
+                    debugger
+                    a.value++
+                }
                 return {
-                    a
+                    a,
+                    add
                 }
             }
         }
