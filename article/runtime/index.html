@@ -10,7 +10,7 @@
     <div id="app"></div>
     <script src="../../packages/vue/dist/vue.global.js"></script>
     <script>
-        const { createApp,ref } = Vue
+        const { createApp,ref,onMounted } = Vue
         const Comp = {
             template: `<button style='color:red' @Click='add'>
                             {{a}}
@@ -21,6 +21,9 @@
                     debugger
                     a.value++
                 }
+                onMounted(() => {
+                    console.log(a.value)
+                })
                 return {
                     a,
                     add
