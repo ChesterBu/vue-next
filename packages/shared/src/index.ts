@@ -52,7 +52,7 @@ export const isPlainObject = (val: unknown): val is object =>
   toTypeString(val) === '[object Object]'
 
 export const isReservedProp = (key: string): boolean =>
-  key === 'key' || key === 'ref' || key === '$once' || key.startsWith(`onVnode`)
+  key === 'key' || key === 'ref' || key.startsWith(`onVnode`)
 
 const camelizeRE = /-(\w)/g
 export const camelize = (str: string): string => {
@@ -67,3 +67,7 @@ export const hyphenate = (str: string): string => {
 export const capitalize = (str: string): string => {
   return str.charAt(0).toUpperCase() + str.slice(1)
 }
+
+// compare whether a value has changed, accounting for NaN.
+export const hasChanged = (value: any, oldValue: any): boolean =>
+  value !== oldValue && (value === value || oldValue === oldValue)
