@@ -10,7 +10,7 @@
     <div id="app"></div>
     <script src="../../packages/vue/dist/vue.global.js"></script>
     <script>
-        const { createApp,ref,onMounted } = Vue
+        const { createApp,ref,onMounted,h } = Vue
         const Comp = {
             template: `<button style='color:red' @Click='add'>
                             {{a}}
@@ -32,7 +32,19 @@
         }
         debugger
         createApp().mount(Comp,'#app')
-        
+        // createApp().mount(function(){
+        //     return h('button',{
+        //         style:{
+        //             color:'red'
+        //         },
+        //         on:{
+        //             click(){
+        //                 console.log(1)
+        //             }
+        //         }
+        //     },2)
+        // },'#app')
+        // createApp().mount('div','#app',{style:{height:'100px',backgroundColor:'blue'}})
     </script>
 </body>
 </html>
