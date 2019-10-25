@@ -128,12 +128,15 @@ export function resolveProps(
     for (const key in rawProps) {
       // key, ref are reserved
       if (isReservedProp(key)) continue
-      // any non-declared data are put into a separate `attrs` object
-      // for spreading
-      if (hasDeclaredProps && !hasOwn(options, key)) {
+      // prop option names are camelized during normalization, so to support
+      // kebab -> camel conversion here we need to camelize the key.
+      const camelKey = camelize(key)
+      if (hasDeclaredProps && !hasOwn(options, camelKey)) {
+        // Any non-declared props are put into a separate `attrs` object
+        // for spreading. Make sure to preserve original key casing
         ;(attrs || (attrs = {}))[key] = rawProps[key]
       } else {
-        setProp(key, rawProps[key])
+        setProp(camelKey, rawProps[key])
       }
     }
   }
@@ -163,7 +166,13 @@ export function resolveProps(
       }
       // runtime validation
       if (__DEV__ && rawProps) {
-        validateProp(key, toRaw(rawProps[key]), opt, isAbsent)
+        let rawValue
+        if (!(key in rawProps) && hyphenate(key) in rawProps) {
+          rawValue = rawProps[hyphenate(key)]
+        } else {
+          rawValue = rawProps[key]
+        }
+        validateProp(key, toRaw(rawValue), opt, isAbsent)
       }
     }
   } else {
