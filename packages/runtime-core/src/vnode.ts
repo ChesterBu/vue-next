@@ -17,12 +17,13 @@ import { ShapeFlags } from './shapeFlags'
 import { isReactive } from '@vue/reactivity'
 import { AppContext } from './apiApp'
 import { SuspenseBoundary } from './suspense'
+import { DirectiveBinding } from './directives'
 
-export const Fragment = __DEV__ ? Symbol('Fragment') : Symbol()
-export const Portal = __DEV__ ? Symbol('Portal') : Symbol()
-export const Suspense = __DEV__ ? Symbol('Suspense') : Symbol()
-export const Text = __DEV__ ? Symbol('Text') : Symbol()
-export const Comment = __DEV__ ? Symbol('Comment') : Symbol()
+export const Fragment = Symbol(__DEV__ ? 'Fragment' : undefined)
+export const Portal = Symbol(__DEV__ ? 'Portal' : undefined)
+export const Suspense = Symbol(__DEV__ ? 'Suspense' : undefined)
+export const Text = Symbol(__DEV__ ? 'Text' : undefined)
+export const Comment = Symbol(__DEV__ ? 'Comment' : undefined)
 
 export type VNodeTypes =
   | string
@@ -66,6 +67,7 @@ export interface VNode<HostNode = any, HostElement = any> {
   children: NormalizedChildren<HostNode, HostElement>
   component: ComponentInternalInstance | null
   suspense: SuspenseBoundary<HostNode, HostElement> | null
+  dirs: DirectiveBinding[] | null
 
   // DOM
   el: HostNode | null
@@ -200,6 +202,7 @@ export function createVNode(
     children: null,
     component: null,
     suspense: null,
+    dirs: null,
     el: null,
     anchor: null,
     target: null,
@@ -229,11 +232,20 @@ export function createVNode(
   return vnode
 }
 
-export function cloneVNode(vnode: VNode): VNode {
+export function cloneVNode<T, U>(
+  vnode: VNode<T, U>,
+  extraProps?: Data
+): VNode<T, U> {
+  // This is intentionally NOT using spread or extend to avoid the runtime
+  // key enumeration cost.
   return {
     _isVNode: true,
     type: vnode.type,
-    props: vnode.props,
+    props: extraProps
+      ? vnode.props
+        ? mergeProps(vnode.props, extraProps)
+        : extraProps
+      : vnode.props,
     key: vnode.key,
     ref: vnode.ref,
     children: vnode.children,
@@ -243,6 +255,7 @@ export function cloneVNode(vnode: VNode): VNode {
     dynamicProps: vnode.dynamicProps,
     dynamicChildren: vnode.dynamicChildren,
     appContext: vnode.appContext,
+    dirs: vnode.dirs,
 
     // these should be set to null since they should only be present on
     // mounted VNodes. If they are somehow not null, this means we have
@@ -269,7 +282,7 @@ export function createCommentVNode(
     : createVNode(Comment, null, text)
 }
 
-export function normalizeVNode(child: VNodeChild): VNode {
+export function normalizeVNode<T, U>(child: VNodeChild<T, U>): VNode<T, U> {
   if (child == null) {
     // empty placeholder
     return createVNode(Comment)
