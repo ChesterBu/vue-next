@@ -13,16 +13,17 @@
         const { createApp,ref,onMounted,h } = Vue
         const Comp = {
             template: `<button style='color:red' @Click='add'>
-                            {{a}}
+                            {{a.c}},{{b}}
                         </button>`,
             setup(){
-                const a = ref(2)
+                const a = ref({
+                    c:1
+                })
                 function add (){
-                    debugger
-                    a.value++
+                    console.log(a.value.c)
                 }
                 onMounted(() => {
-                    console.log(a.value)
+                    console.log(a.c)
                 })
                 return {
                     a,
@@ -30,6 +31,7 @@
                 }
             }
         }
+        debugger
         createApp().mount(Comp,'#app')
         // createApp().mount(function(){
         //     return h('button',{
