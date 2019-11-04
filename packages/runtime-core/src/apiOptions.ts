@@ -67,8 +67,12 @@ export interface ComponentOptionsBase<
   inheritAttrs?: boolean
 
   // type-only differentiator to separate OptionWihtoutProps from a constructor
-  // type returned by createComponent()
-  __isConstructor?: never
+  // type returned by createComponent() or FunctionalComponent
+  call?: never
+  // type-only differentiators for built-in Vnode types
+  __isFragment?: never
+  __isPortal?: never
+  __isSuspense?: never
 }
 
 export type ComponentOptionsWithoutProps<

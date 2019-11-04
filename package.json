@@ -11,8 +11,16 @@
     "size": "yarn size-runtime && yarn size-compiler",
     "lint": "prettier --write --parser typescript \"packages/**/*.ts?(x)\"",
     "test": "jest",
+    "test-dts": "node scripts/build.js reactivity runtime-core runtime-dom -t -f esm && tsd",
     "git": "git fetch upstream && git merge upstream/master",
     "postgit":"git push"
+  },
+  "types": "test-dts/index.d.ts",
+  "tsd": {
+    "directory": "test-dts"
+  },
+  "gitHooks": {
+    "pre-commit": "lint-staged"
   },
   "lint-staged": {
     "*.js": [
@@ -43,7 +51,8 @@
     "rollup-plugin-terser": "^5.1.1",
     "rollup-plugin-typescript2": "^0.24.0",
     "ts-jest": "^24.0.2",
-    "typescript": "^3.5.3",
+    "tsd": "^0.10.0",
+    "typescript": "^3.6.4",
     "yorkie": "^2.0.0"
   }
 }

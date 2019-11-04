@@ -47,11 +47,11 @@ import { ComponentPublicInstance } from './componentProxy'
 import { App, createAppAPI } from './apiApp'
 import {
   SuspenseBoundary,
-  SuspenseImpl,
+  Suspense,
   queueEffectWithSuspense
-} from './suspense'
+} from './rendererSuspense'
 import { ErrorCodes, callWithErrorHandling } from './errorHandling'
-import { KeepAliveSink } from './keepAlive'
+import { KeepAliveSink } from './components/KeepAlive'
 
 export interface RendererOptions<HostNode = any, HostElement = any> {
   patchProp(
@@ -265,7 +265,7 @@ export function createRenderer<
             optimized
           )
         } else if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
-          ;(type as typeof SuspenseImpl).process(
+          ;(type as typeof Suspense).process(
             n1,
             n2,
             container,
@@ -756,7 +756,7 @@ export function createRenderer<
     optimized: boolean
   ) {
     if (n1 == null) {
-      if (n2.shapeFlag & ShapeFlags.STATEFUL_COMPONENT_KEPT_ALIVE) {
+      if (n2.shapeFlag & ShapeFlags.COMPONENT_KEPT_ALIVE) {
         ;(parentComponent!.sink as KeepAliveSink).activate(
           n2,
           container,
@@ -804,6 +804,14 @@ export function createRenderer<
       }
     }
     if (n2.ref !== null && parentComponent !== null) {
+      if (__DEV__ && !(n2.shapeFlag & ShapeFlags.STATEFUL_COMPONENT)) {
+        pushWarningContext(n2)
+        warn(
+          `Functional components do not support "ref" because they do not ` +
+            `have instances.`
+        )
+        popWarningContext()
+      }
       setRef(n2.ref, n1 && n1.ref, parentComponent, n2.component!.renderProxy)
     }
   }
@@ -903,8 +911,7 @@ export function createRenderer<
         // activated hook for keep-alive roots.
         if (
           instance.a !== null &&
-          instance.vnode.shapeFlag &
-            ShapeFlags.STATEFUL_COMPONENT_SHOULD_KEEP_ALIVE
+          instance.vnode.shapeFlag & ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE
         ) {
           queuePostRenderEffect(instance.a, parentSuspense)
         }
@@ -1409,7 +1416,7 @@ export function createRenderer<
     }
 
     if (shapeFlag & ShapeFlags.COMPONENT) {
-      if (shapeFlag & ShapeFlags.STATEFUL_COMPONENT_SHOULD_KEEP_ALIVE) {
+      if (shapeFlag & ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE) {
         ;(parentComponent!.sink as KeepAliveSink).deactivate(vnode)
       } else {
         unmountComponent(vnode.component!, parentSuspense, doRemove)
@@ -1484,7 +1491,7 @@ export function createRenderer<
     if (
       da !== null &&
       !isDeactivated &&
-      instance.vnode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT_SHOULD_KEEP_ALIVE
+      instance.vnode.shapeFlag & ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE
     ) {
       queuePostRenderEffect(da, parentSuspense)
     }

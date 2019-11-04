@@ -6,19 +6,19 @@ import {
   ComponentInternalInstance,
   LifecycleHooks,
   currentInstance
-} from './component'
-import { VNode, cloneVNode, isVNode } from './vnode'
-import { warn } from './warning'
-import { onBeforeUnmount, injectHook, onUnmounted } from './apiLifecycle'
+} from '../component'
+import { VNode, cloneVNode, isVNode } from '../vnode'
+import { warn } from '../warning'
+import { onBeforeUnmount, injectHook, onUnmounted } from '../apiLifecycle'
 import { isString, isArray } from '@vue/shared'
-import { watch } from './apiWatch'
-import { ShapeFlags } from './shapeFlags'
-import { SuspenseBoundary } from './suspense'
+import { watch } from '../apiWatch'
+import { ShapeFlags } from '../shapeFlags'
+import { SuspenseBoundary } from '../rendererSuspense'
 import {
   RendererInternals,
   queuePostRenderEffect,
   invokeHooks
-} from './createRenderer'
+} from '../renderer'
 
 type MatchPattern = string | RegExp | string[] | RegExp[]
 
@@ -100,7 +100,7 @@ export const KeepAlive = {
 
     function pruneCache(filter?: (name: string) => boolean) {
       cache.forEach((vnode, key) => {
-        const name = getName(vnode.type)
+        const name = getName(vnode.type as Component)
         if (name && (!filter || !filter(name))) {
           pruneCacheEntry(key)
         }
@@ -135,7 +135,7 @@ export const KeepAlive = {
 
     return () => {
       if (!slots.default) {
-        return
+        return null
       }
 
       const children = slots.default()
@@ -180,7 +180,7 @@ export const KeepAlive = {
         vnode.anchor = cached.anchor
         vnode.component = cached.component
         // avoid vnode being mounted as fresh
-        vnode.shapeFlag |= ShapeFlags.STATEFUL_COMPONENT_KEPT_ALIVE
+        vnode.shapeFlag |= ShapeFlags.COMPONENT_KEPT_ALIVE
         // make this key the freshest
         keys.delete(key)
         keys.add(key)
@@ -192,7 +192,7 @@ export const KeepAlive = {
         }
       }
       // avoid vnode being unmounted
-      vnode.shapeFlag |= ShapeFlags.STATEFUL_COMPONENT_SHOULD_KEEP_ALIVE
+      vnode.shapeFlag |= ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE
 
       current = vnode
       return vnode
