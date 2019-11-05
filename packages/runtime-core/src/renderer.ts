@@ -47,9 +47,9 @@ import { ComponentPublicInstance } from './componentProxy'
 import { App, createAppAPI } from './apiApp'
 import {
   SuspenseBoundary,
-  Suspense,
-  queueEffectWithSuspense
-} from './rendererSuspense'
+  queueEffectWithSuspense,
+  SuspenseImpl
+} from './components/Suspense'
 import { ErrorCodes, callWithErrorHandling } from './errorHandling'
 import { KeepAliveSink } from './components/KeepAlive'
 
@@ -265,7 +265,7 @@ export function createRenderer<
             optimized
           )
         } else if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
-          ;(type as typeof Suspense).process(
+          ;(type as typeof SuspenseImpl).process(
             n1,
             n2,
             container,
@@ -619,6 +619,8 @@ export function createRenderer<
     }
   }
 
+  let devFragmentID = 0
+
   function processFragment(
     n1: HostVNode | null,
     n2: HostVNode,
@@ -629,10 +631,16 @@ export function createRenderer<
     isSVG: boolean,
     optimized: boolean
   ) {
-    const fragmentStartAnchor = (n2.el = n1 ? n1.el : hostCreateComment(''))!
+    const showID = __DEV__ && !__TEST__
+    const fragmentStartAnchor = (n2.el = n1
+      ? n1.el
+      : hostCreateComment(showID ? `fragment-${devFragmentID}-start` : ''))!
     const fragmentEndAnchor = (n2.anchor = n1
       ? n1.anchor
-      : hostCreateComment(''))!
+      : hostCreateComment(showID ? `fragment-${devFragmentID}-end` : ''))!
+    if (showID) {
+      devFragmentID++
+    }
     if (n1 == null) {
       hostInsert(fragmentStartAnchor, container, anchor)
       hostInsert(fragmentEndAnchor, container, anchor)
@@ -725,7 +733,7 @@ export function createRenderer<
       if (targetSelector !== (n1.props && n1.props.target)) {
         const nextTarget = (n2.target = isString(targetSelector)
           ? hostQuerySelector(targetSelector)
-          : null)
+          : targetSelector)
         if (nextTarget != null) {
           // move content
           if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
