@@ -1,6 +1,6 @@
 import {
-  Transition as BaseTransition,
-  TransitionProps,
+  BaseTransition,
+  BaseTransitionProps,
   h,
   warn,
   FunctionalComponent,
@@ -13,9 +13,10 @@ import { ErrorCodes } from 'packages/runtime-core/src/errorHandling'
 const TRANSITION = 'transition'
 const ANIMATION = 'animation'
 
-export interface CSSTransitionProps extends TransitionProps {
+export interface TransitionProps extends BaseTransitionProps {
   name?: string
   type?: typeof TRANSITION | typeof ANIMATION
+  css?: boolean
   duration?: number | { enter: number; leave: number }
   // custom transition classes
   enterFromClass?: string
@@ -29,34 +30,41 @@ export interface CSSTransitionProps extends TransitionProps {
   leaveToClass?: string
 }
 
-// CSSTransition is a higher-order-component based on the platform-agnostic
+// DOM Transition is a higher-order-component based on the platform-agnostic
 // base Transition component, with DOM-specific logic.
-export const CSSTransition: FunctionalComponent = (
-  props: CSSTransitionProps,
+export const Transition: FunctionalComponent = (
+  props: TransitionProps,
   { slots }
-) => h(BaseTransition, resolveCSSTransitionProps(props), slots)
+) => h(BaseTransition, resolveTransitionProps(props), slots)
 
-if (__DEV__) {
-  CSSTransition.props = {
-    ...(BaseTransition as any).props,
-    name: String,
-    type: String,
-    enterFromClass: String,
-    enterActiveClass: String,
-    enterToClass: String,
-    appearFromClass: String,
-    appearActiveClass: String,
-    appearToClass: String,
-    leaveFromClass: String,
-    leaveActiveClass: String,
-    leaveToClass: String,
-    duration: Object
-  }
+export const TransitionPropsValidators = {
+  ...(BaseTransition as any).props,
+  name: String,
+  type: String,
+  css: {
+    type: Boolean,
+    default: true
+  },
+  duration: Object,
+  enterFromClass: String,
+  enterActiveClass: String,
+  enterToClass: String,
+  appearFromClass: String,
+  appearActiveClass: String,
+  appearToClass: String,
+  leaveFromClass: String,
+  leaveActiveClass: String,
+  leaveToClass: String
 }
 
-function resolveCSSTransitionProps({
+if (__DEV__) {
+  Transition.props = TransitionPropsValidators
+}
+
+export function resolveTransitionProps({
   name = 'v',
   type,
+  css = true,
   duration,
   enterFromClass = `${name}-enter-from`,
   enterActiveClass = `${name}-enter-active`,
@@ -68,7 +76,11 @@ function resolveCSSTransitionProps({
   leaveActiveClass = `${name}-leave-active`,
   leaveToClass = `${name}-leave-to`,
   ...baseProps
-}: CSSTransitionProps): TransitionProps {
+}: TransitionProps): BaseTransitionProps {
+  if (!css) {
+    return baseProps
+  }
+
   const instance = getCurrentInstance()!
   const durations = normalizeDuration(duration)
   const enterDuration = durations && durations[0]
@@ -82,7 +94,7 @@ function resolveCSSTransitionProps({
     enterToClass = appearToClass
   }
 
-  type Hook = (el: Element, done?: () => void) => void
+  type Hook = (el: HTMLElement, done?: () => void) => void
 
   const finishEnter: Hook = (el, done) => {
     removeTransitionClass(el, enterToClass)
@@ -147,7 +159,7 @@ function resolveCSSTransitionProps({
 }
 
 function normalizeDuration(
-  duration: CSSTransitionProps['duration']
+  duration: TransitionProps['duration']
 ): [number, number] | null {
   if (duration == null) {
     return null
@@ -179,7 +191,7 @@ function validateDuration(val: unknown) {
   }
 }
 
-export interface ElementWithTransition extends Element {
+export interface ElementWithTransition extends HTMLElement {
   // _vtc = Vue Transition Classes.
   // Store the temporarily-added transition classes on the element
   // so that we can avoid overwriting them if the element's class is patched
@@ -187,12 +199,12 @@ export interface ElementWithTransition extends Element {
   _vtc?: Set<string>
 }
 
-function addTransitionClass(el: ElementWithTransition, cls: string) {
+export function addTransitionClass(el: ElementWithTransition, cls: string) {
   el.classList.add(cls)
   ;(el._vtc || (el._vtc = new Set())).add(cls)
 }
 
-function removeTransitionClass(el: ElementWithTransition, cls: string) {
+export function removeTransitionClass(el: ElementWithTransition, cls: string) {
   el.classList.remove(cls)
   if (el._vtc) {
     el._vtc.delete(cls)
@@ -210,7 +222,7 @@ function nextFrame(cb: () => void) {
 
 function whenTransitionEnds(
   el: Element,
-  expectedType: CSSTransitionProps['type'] | undefined,
+  expectedType: TransitionProps['type'] | undefined,
   cb: () => void
 ) {
   const { type, timeout, propCount } = getTransitionInfo(el, expectedType)
@@ -243,11 +255,12 @@ interface CSSTransitionInfo {
   type: typeof TRANSITION | typeof ANIMATION | null
   propCount: number
   timeout: number
+  hasTransform: boolean
 }
 
-function getTransitionInfo(
+export function getTransitionInfo(
   el: Element,
-  expectedType?: CSSTransitionProps['type']
+  expectedType?: TransitionProps['type']
 ): CSSTransitionInfo {
   const styles: any = window.getComputedStyle(el)
   // JSDOM may return undefined for transition properties
@@ -289,10 +302,14 @@ function getTransitionInfo(
         : animationDurations.length
       : 0
   }
+  const hasTransform =
+    type === TRANSITION &&
+    /\b(transform|all)(,|$)/.test(styles[TRANSITION + 'Property'])
   return {
     type,
     timeout,
-    propCount
+    propCount,
+    hasTransform
   }
 }
 

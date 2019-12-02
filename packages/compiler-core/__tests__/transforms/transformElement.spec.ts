@@ -10,7 +10,8 @@ import {
   PORTAL,
   RESOLVE_DYNAMIC_COMPONENT,
   SUSPENSE,
-  KEEP_ALIVE
+  KEEP_ALIVE,
+  BASE_TRANSITION
 } from '../../src/runtimeHelpers'
 import {
   CallExpression,
@@ -347,6 +348,26 @@ describe('compiler: element transform', () => {
       expect(node.arguments).toMatchObject([
         KEEP_ALIVE,
         `null`,
+        // keep-alive should not compile content to slots
+        [{ type: NodeTypes.ELEMENT, tag: 'span' }]
+      ])
+    }
+
+    assert(`keep-alive`)
+    assert(`KeepAlive`)
+  })
+
+  test('should handle <BaseTransition>', () => {
+    function assert(tag: string) {
+      const { root, node } = parseWithElementTransform(
+        `<${tag}><span /></${tag}>`
+      )
+      expect(root.components.length).toBe(0)
+      expect(root.helpers).toContain(BASE_TRANSITION)
+      expect(node.callee).toBe(CREATE_VNODE)
+      expect(node.arguments).toMatchObject([
+        BASE_TRANSITION,
+        `null`,
         createObjectMatcher({
           default: {
             type: NodeTypes.JS_FUNCTION_EXPRESSION
@@ -356,8 +377,8 @@ describe('compiler: element transform', () => {
       ])
     }
 
-    assert(`keep-alive`)
-    assert(`KeepAlive`)
+    assert(`base-transition`)
+    assert(`BaseTransition`)
   })
 
   test('error on v-bind with no argument', () => {
@@ -788,7 +809,8 @@ describe('compiler: element transform', () => {
             {
               type: NodeTypes.SIMPLE_EXPRESSION,
               content: 'foo'
-            }
+            },
+            '$'
           ]
         }
       ])
