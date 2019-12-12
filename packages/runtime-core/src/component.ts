@@ -2,7 +2,8 @@ import { VNode, VNodeChild, isVNode } from './vnode'
 import { ReactiveEffect, reactive, shallowReadonly } from '@vue/reactivity'
 import {
   PublicInstanceProxyHandlers,
-  ComponentPublicInstance
+  ComponentPublicInstance,
+  runtimeCompiledRenderProxyHandlers
 } from './componentProxy'
 import { ComponentPropsOptions } from './componentProps'
 import { Slots } from './componentSlots'
@@ -23,11 +24,10 @@ import {
   isObject,
   NO,
   makeMap,
-  isPromise,
-  generateCodeFrame
+  isPromise
 } from '@vue/shared'
 import { SuspenseBoundary } from './components/Suspense'
-import { CompilerError, CompilerOptions } from '@vue/compiler-core'
+import { CompilerOptions } from '@vue/compiler-core'
 import { currentRenderingInstance } from './componentRenderUtils'
 
 export type Data = { [key: string]: unknown }
@@ -68,7 +68,10 @@ export interface SetupContext {
   emit: Emit
 }
 
-export type RenderFunction = () => VNodeChild
+export type RenderFunction = {
+  (): VNodeChild
+  isRuntimeCompiled?: boolean
+}
 
 export interface ComponentInternalInstance {
   type: FunctionalComponent | ComponentOptions
@@ -82,7 +85,7 @@ export interface ComponentInternalInstance {
   render: RenderFunction | null
   effects: ReactiveEffect[] | null
   provides: Data
-  // cache for renderProxy access type to avoid hasOwnProperty calls
+  // cache for proxy access type to avoid hasOwnProperty calls
   accessCache: Data | null
   // cache for render function values that rely on _ctx but won't need updates
   // after initialized (e.g. inline handlers)
@@ -98,7 +101,10 @@ export interface ComponentInternalInstance {
   props: Data
   attrs: Data
   slots: Slots
-  renderProxy: ComponentPublicInstance | null
+  proxy: ComponentPublicInstance | null
+  // alternative proxy used only for runtime-compiled render functions using
+  // `with` block
+  withProxy: ComponentPublicInstance | null
   propsProxy: Data | null
   setupContext: SetupContext | null
   refs: Data
@@ -150,7 +156,8 @@ export function createComponentInstance(
     subTree: null!, // will be set synchronously right after creation
     update: null!, // will be set synchronously right after creation
     render: null,
-    renderProxy: null,
+    proxy: null,
+    withProxy: null,
     propsProxy: null,
     setupContext: null,
     effects: null,
@@ -264,8 +271,8 @@ export function setupStatefulComponent(
   }
   // 0. create render proxy property access cache
   instance.accessCache = {}
-  // 1. create render proxy
-  instance.renderProxy = new Proxy(instance, PublicInstanceProxyHandlers)
+  // 1. create public instance / render proxy
+  instance.proxy = new Proxy(instance, PublicInstanceProxyHandlers)
   // 2. create props proxy
   // the propsProxy is a reactive AND readonly proxy to the actual props.
   // it will be updated in resolveProps() on updates before render
@@ -335,7 +342,7 @@ export function handleSetupResult(
 }
 
 type CompileFunction = (
-  template: string,
+  template: string | object,
   options?: CompilerOptions
 ) => RenderFunction
 
@@ -355,28 +362,16 @@ function finishComponentSetup(
     if (__RUNTIME_COMPILE__ && Component.template && !Component.render) {
       // __RUNTIME_COMPILE__ ensures `compile` is provided
       Component.render = compile!(Component.template, {
-        isCustomElement: instance.appContext.config.isCustomElement || NO,
-        onError(err: CompilerError) {
-          if (__DEV__) {
-            const message = `Template compilation error: ${err.message}`
-            const codeFrame =
-              err.loc &&
-              generateCodeFrame(
-                Component.template!,
-                err.loc.start.offset,
-                err.loc.end.offset
-              )
-            warn(codeFrame ? `${message}\n${codeFrame}` : message)
-          }
-        }
+        isCustomElement: instance.appContext.config.isCustomElement || NO
       })
     }
+
     if (__DEV__ && !Component.render) {
       /* istanbul ignore if */
       if (!__RUNTIME_COMPILE__ && Component.template) {
         warn(
           `Component provides template but the build of Vue you are running ` +
-            `does not support on-the-fly template compilation. Either use the ` +
+            `does not support runtime template compilation. Either use the ` +
             `full build or pre-compile the template using Vue CLI.`
         )
       } else {
@@ -387,7 +382,18 @@ function finishComponentSetup(
         )
       }
     }
+
     instance.render = (Component.render || NOOP) as RenderFunction
+
+    // for runtime-compiled render functions using `with` blocks, the render
+    // proxy used needs a different `has` handler which is more performant and
+    // also only allows a whitelist of globals to fallthrough.
+    if (__RUNTIME_COMPILE__ && instance.render.isRuntimeCompiled) {
+      instance.withProxy = new Proxy(
+        instance,
+        runtimeCompiledRenderProxyHandlers
+      )
+    }
   }
 
   // support for 2.x options
