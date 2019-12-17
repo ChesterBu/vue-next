@@ -14,8 +14,8 @@ export {
 } from './parse'
 export {
   TemplateCompiler,
-  TemplateCompileOptions,
-  TemplateCompileResults
+  SFCTemplateCompileOptions,
+  SFCTemplateCompileResults
 } from './compileTemplate'
-export { StyleCompileOptions, StyleCompileResults } from './compileStyle'
-export { CompilerOptions } from '@vue/compiler-core'
+export { SFCStyleCompileOptions, SFCStyleCompileResults } from './compileStyle'
+export { CompilerOptions, generateCodeFrame } from '@vue/compiler-core'
