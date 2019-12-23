@@ -13,7 +13,7 @@ import {
   callWithErrorHandling,
   callWithAsyncErrorHandling
 } from './errorHandling'
-import { AppContext, createAppContext, AppConfig } from './apiApp'
+import { AppContext, createAppContext, AppConfig } from './apiCreateApp'
 import { Directive, validateDirectiveName } from './directives'
 import { applyOptions, ComponentOptions } from './apiOptions'
 import {
@@ -32,15 +32,18 @@ import { currentRenderingInstance } from './componentRenderUtils'
 
 export type Data = { [key: string]: unknown }
 
-export interface FunctionalComponent<P = {}> {
+export interface SFCInternalOptions {
+  __scopeId?: string
+  __cssModules?: Data
+  __hmrId?: string
+  __hmrUpdated?: boolean
+}
+
+export interface FunctionalComponent<P = {}> extends SFCInternalOptions {
   (props: P, ctx: SetupContext): VNodeChild
   props?: ComponentPropsOptions<P>
   inheritAttrs?: boolean
   displayName?: string
-
-  // internal HMR related flags
-  __hmrId?: string
-  __hmrUpdated?: boolean
 }
 
 export type Component = ComponentOptions | FunctionalComponent
@@ -146,7 +149,7 @@ export interface ComponentInternalInstance {
 
 const emptyAppContext = createAppContext()
 
-export function createComponentInstance(
+export function defineComponentInstance(
   vnode: VNode,
   parent: ComponentInternalInstance | null
 ) {

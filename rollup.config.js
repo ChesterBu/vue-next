@@ -23,9 +23,14 @@ const knownExternals = fs.readdirSync(packagesDir).filter(p => {
 // ensure TS checks only once for each build
 let hasTSChecked = false
 
-const configs = {
+const outputConfigs = {
   'esm-bundler': {
     file: resolve(`dist/${name}.esm-bundler.js`),
+    format: `es`
+  },
+  // main "vue" package only
+  'esm-bundler-runtime': {
+    file: resolve(`dist/${name}.runtime.esm-bundler.js`),
     format: `es`
   },
   cjs: {
@@ -47,7 +52,7 @@ const inlineFormats = process.env.FORMATS && process.env.FORMATS.split(',')
 const packageFormats = inlineFormats || packageOptions.formats || defaultFormats
 const packageConfigs = process.env.PROD_ONLY
   ? []
-  : packageFormats.map(format => createConfig(configs[format]))
+  : packageFormats.map(format => createConfig(format, outputConfigs[format]))
 
 if (process.env.NODE_ENV === 'production') {
   packageFormats.forEach(format => {
@@ -62,14 +67,19 @@ if (process.env.NODE_ENV === 'production') {
 
 export default packageConfigs
 
-function createConfig(output, plugins = []) {
-  output.externalLiveBindings = false
+function createConfig(format, output, plugins = []) {
+  if (!output) {
+    console.log(require('chalk').yellow(`invalid format: "${format}"`))
+    process.exit(1)
+  }
 
+  output.externalLiveBindings = false
+  output.sourcemap = true
   const isProductionBuild =
     process.env.__DEV__ === 'false' || /\.prod\.js$/.test(output.file)
-  const isGlobalBuild = /\.global(\.prod)?\.js$/.test(output.file)
-  const isBundlerESMBuild = /\.esm-bundler\.js$/.test(output.file)
-  const isRawESMBuild = /esm(\.prod)?\.js$/.test(output.file)
+  const isGlobalBuild = format === 'global'
+  const isRawESMBuild = format === 'esm'
+  const isBundlerESMBuild = /esm-bundler/.test(format)
   const isRuntimeCompileBuild = /vue\./.test(output.file)
 
   if (isGlobalBuild) {
@@ -98,12 +108,11 @@ function createConfig(output, plugins = []) {
   // during a single build.
   hasTSChecked = true
 
-  const externals = Object.keys(aliasOptions)
-    .concat(Object.keys(pkg.dependencies || []))
-    .filter(p => p !== '@vue/shared')
-  output.sourcemap = true
+  const entryFile =
+    format === 'esm-bundler-runtime' ? `src/runtime.ts` : `src/index.ts`
+
   return {
-    input: resolve(`src/index.ts`),
+    input: resolve(entryFile),
     // Global and Browser ESM builds inlines everything so that they can be
     // used alone.
     external:
@@ -118,7 +127,7 @@ function createConfig(output, plugins = []) {
       createReplacePlugin(
         isProductionBuild,
         isBundlerESMBuild,
-        (isGlobalBuild || isRawESMBuild) &&
+        (isGlobalBuild || isRawESMBuild || isBundlerESMBuild) &&
           !packageOptions.enableNonBrowserBranches,
         isRuntimeCompileBuild
       ),
@@ -171,18 +180,19 @@ function createReplacePlugin(
 }
 
 function createProductionConfig(format) {
-  return createConfig({
+  return createConfig(format, {
     file: resolve(`dist/${name}.${format}.prod.js`),
-    format: configs[format].format
+    format: outputConfigs[format].format
   })
 }
 
 function createMinifiedConfig(format) {
   const { terser } = require('rollup-plugin-terser')
   return createConfig(
+    format,
     {
       file: resolve(`dist/${name}.${format}.prod.js`),
-      format: configs[format].format
+      format: outputConfigs[format].format
     },
     [
       terser({
