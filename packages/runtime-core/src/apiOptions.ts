@@ -51,7 +51,7 @@ export interface ComponentOptionsBase<
   M extends MethodOptions
 > extends LegacyOptions<Props, RawBindings, D, C, M>, SFCInternalOptions {
   setup?: (
-    this: null,
+    this: void,
     props: Props,
     ctx: SetupContext
   ) => RawBindings | RenderFunction | void
@@ -63,7 +63,10 @@ export interface ComponentOptionsBase<
   // Luckily `render()` doesn't need any arguments nor does it care about return
   // type.
   render?: Function
-  components?: Record<string, Component>
+  components?: Record<
+    string,
+    Component | { new (): ComponentPublicInstance<any, any, any, any, any> }
+  >
   directives?: Record<string, Directive>
   inheritAttrs?: boolean
 
@@ -82,7 +85,7 @@ export type ComponentOptionsWithoutProps<
   D = {},
   C extends ComputedOptions = {},
   M extends MethodOptions = {}
-> = ComponentOptionsBase<Props, RawBindings, D, C, M> & {
+> = ComponentOptionsBase<Readonly<Props>, RawBindings, D, C, M> & {
   props?: undefined
 } & ThisType<ComponentPublicInstance<{}, RawBindings, D, C, M, Readonly<Props>>>
 
