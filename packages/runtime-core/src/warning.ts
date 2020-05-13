@@ -48,10 +48,7 @@ export function warn(msg: string, ...args: any[]) {
         msg + args.join(''),
         instance && instance.proxy,
         trace
-          .map(
-            ({ vnode }) =>
-              `at <${formatComponentName(vnode.type as Component)}>`
-          )
+          .map(({ vnode }) => `at <${formatComponentName(vnode.type)}>`)
           .join('\n'),
         trace
       ]
@@ -92,8 +89,8 @@ function getComponentTrace(): ComponentTraceStack {
         recurseCount: 0
       })
     }
-    const parentInstance: ComponentInternalInstance | null = currentVNode.component!
-      .parent
+    const parentInstance: ComponentInternalInstance | null =
+      currentVNode.component && currentVNode.component.parent
     currentVNode = parentInstance && parentInstance.vnode
   }
 
@@ -111,12 +108,12 @@ function formatTrace(trace: ComponentTraceStack): any[] {
 function formatTraceEntry({ vnode, recurseCount }: TraceEntry): any[] {
   const postfix =
     recurseCount > 0 ? `... (${recurseCount} recursive calls)` : ``
-  const open = ` at <${formatComponentName(vnode)}`
+  const isRoot = vnode.component ? vnode.component.parent == null : false
+  const open = ` at <${formatComponentName(vnode.type, isRoot)}`
   const close = `>` + postfix
-  const rootLabel = vnode.component!.parent == null ? `(Root)` : ``
   return vnode.props
-    ? [open, ...formatProps(vnode.props), close, rootLabel]
-    : [open + close, rootLabel]
+    ? [open, ...formatProps(vnode.props), close]
+    : [open + close]
 }
 
 function formatProps(props: Data): any[] {

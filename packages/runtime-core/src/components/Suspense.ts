@@ -227,6 +227,8 @@ export interface SuspenseBoundary {
   unmount(parentSuspense: SuspenseBoundary | null, doRemove?: boolean): void
 }
 
+let hasWarned = false
+
 function createSuspenseBoundary(
   vnode: VNode,
   parent: SuspenseBoundary | null,
@@ -239,6 +241,14 @@ function createSuspenseBoundary(
   rendererInternals: RendererInternals,
   isHydrating = false
 ): SuspenseBoundary {
+  /* istanbul ignore if */
+  if (__DEV__ && !__TEST__ && !hasWarned) {
+    hasWarned = true
+    console[console.info ? 'info' : 'log'](
+      `<Suspense> is an experimental feature and its API will likely change.`
+    )
+  }
+
   const {
     p: patch,
     m: move,
@@ -422,7 +432,7 @@ function createSuspenseBoundary(
           handleSetupResult(instance, asyncSetupResult, false)
           if (hydratedEl) {
             // vnode may have been replaced if an update happened before the
-            // async dep is reoslved.
+            // async dep is resolved.
             vnode.el = hydratedEl
           }
           setupRenderEffect(

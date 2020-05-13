@@ -209,7 +209,7 @@ export function createAppAPI<HostElement>(
           vnode.appContext = context
 
           // HMR root reload
-          if (__BUNDLER__ && __DEV__) {
+          if (__DEV__) {
             context.reload = () => {
               render(cloneVNode(vnode), rootContainer)
             }
@@ -241,7 +241,7 @@ export function createAppAPI<HostElement>(
       provide(key, value) {
         if (__DEV__ && key in context.provides) {
           warn(
-            `App already provides property with key "${key}". ` +
+            `App already provides property with key "${String(key)}". ` +
               `It will be overwritten with the new value.`
           )
         }

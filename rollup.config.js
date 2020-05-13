@@ -60,7 +60,10 @@ const packageConfigs = process.env.PROD_ONLY
 
 if (process.env.NODE_ENV === 'production') {
   packageFormats.forEach(format => {
-    if (format === 'cjs' && packageOptions.prod !== false) {
+    if (packageOptions.prod === false) {
+      return
+    }
+    if (format === 'cjs') {
       packageConfigs.push(createProductionConfig(format))
     }
     if (/^(global|esm-browser)(-runtime)?/.test(format)) {
@@ -115,18 +118,39 @@ function createConfig(format, output, plugins = []) {
 
   const external =
     isGlobalBuild || isBrowserESMBuild
-      ? []
-      : [
+      ? packageOptions.enableNonBrowserBranches
+        ? // externalize postcss for @vue/compiler-sfc
+          // because @rollup/plugin-commonjs cannot bundle it properly
+          ['postcss']
+        : // normal browser builds - non-browser only imports are tree-shaken,
+          // they are only listed here to suppress warnings.
+          ['source-map', '@babel/parser', 'estree-walker']
+      : // Node / esm-bundler builds. Externalize everything.
+        [
           ...Object.keys(pkg.dependencies || {}),
-          ...Object.keys(pkg.peerDependencies || {})
+          ...Object.keys(pkg.peerDependencies || {}),
+          ...['path', 'url'] // for @vue/compiler-sfc
         ]
 
-  const nodePlugins = packageOptions.enableNonBrowserBranches
-    ? [
-        require('@rollup/plugin-node-resolve')(),
-        require('@rollup/plugin-commonjs')()
-      ]
-    : []
+  // the browser builds of @vue/compiler-sfc requires postcss to be available
+  // as a global (e.g. http://wzrd.in/standalone/postcss)
+  output.globals = {
+    postcss: 'postcss'
+  }
+
+  const nodePlugins =
+    packageOptions.enableNonBrowserBranches && format !== 'cjs'
+      ? [
+          require('@rollup/plugin-node-resolve')({
+            preferBuiltins: true
+          }),
+          require('@rollup/plugin-commonjs')({
+            sourceMap: false
+          }),
+          require('rollup-plugin-node-builtins')(),
+          require('rollup-plugin-node-globals')()
+        ]
+      : []
 
   return {
     input: resolve(entryFile),
@@ -141,6 +165,7 @@ function createConfig(format, output, plugins = []) {
       createReplacePlugin(
         isProductionBuild,
         isBundlerESMBuild,
+        isBrowserESMBuild,
         // isBrowserBuild?
         (isGlobalBuild || isBrowserESMBuild || isBundlerESMBuild) &&
           !packageOptions.enableNonBrowserBranches,
@@ -155,6 +180,9 @@ function createConfig(format, output, plugins = []) {
       if (!/Circular/.test(msg)) {
         warn(msg)
       }
+    },
+    treeshake: {
+      moduleSideEffects: false
     }
   }
 }
@@ -162,6 +190,7 @@ function createConfig(format, output, plugins = []) {
 function createReplacePlugin(
   isProduction,
   isBundlerESMBuild,
+  isBrowserESMBuild,
   isBrowserBuild,
   isGlobalBuild,
   isNodeBuild
@@ -178,9 +207,9 @@ function createReplacePlugin(
     __TEST__: false,
     // If the build is expected to run directly in the browser (global / esm builds)
     __BROWSER__: isBrowserBuild,
-    // is targeting bundlers?
-    __BUNDLER__: isBundlerESMBuild,
     __GLOBAL__: isGlobalBuild,
+    __ESM_BUNDLER__: isBundlerESMBuild,
+    __ESM_BROWSER__: isBrowserESMBuild,
     // is targeting Node (SSR)?
     __NODE_JS__: isNodeBuild,
     __FEATURE_OPTIONS__: true,

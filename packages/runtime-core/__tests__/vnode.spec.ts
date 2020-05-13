@@ -12,7 +12,7 @@ import {
 } from '../src/vnode'
 import { Data } from '../src/component'
 import { ShapeFlags, PatchFlags } from '@vue/shared'
-import { h } from '../src'
+import { h, reactive, isReactive } from '../src'
 import { createApp, nodeOps, serializeInner } from '@vue/runtime-test'
 
 describe('vnode', () => {
@@ -198,6 +198,24 @@ describe('vnode', () => {
     expect(cloned2).toEqual(node2)
     expect(cloneVNode(node2)).toEqual(node2)
     expect(cloneVNode(node2)).toEqual(cloned2)
+
+    // #1041 should use resolved key/ref
+    expect(cloneVNode(createVNode('div', { key: 1 })).key).toBe(1)
+    expect(cloneVNode(createVNode('div', { key: 1 }), { key: 2 }).key).toBe(2)
+    expect(cloneVNode(createVNode('div'), { key: 2 }).key).toBe(2)
+
+    // ref normalizes to [currentRenderingInstance, ref]
+    expect(cloneVNode(createVNode('div', { ref: 'foo' })).ref).toEqual([
+      null,
+      'foo'
+    ])
+    expect(
+      cloneVNode(createVNode('div', { ref: 'foo' }), { ref: 'bar' }).ref
+    ).toEqual([null, 'bar'])
+    expect(cloneVNode(createVNode('div'), { ref: 'bar' }).ref).toEqual([
+      null,
+      'bar'
+    ])
   })
 
   describe('mergeProps', () => {
@@ -241,16 +259,45 @@ describe('vnode', () => {
       })
     })
 
-    test('handlers', () => {
-      let clickHander1 = function() {}
-      let clickHander2 = function() {}
-      let focusHander2 = function() {}
-
-      let props1: Data = { onClick: clickHander1 }
-      let props2: Data = { onClick: clickHander2, onFocus: focusHander2 }
+    test('style w/ strings', () => {
+      let props1: Data = {
+        style: 'width:100px;right:10;top:10'
+      }
+      let props2: Data = {
+        style: [
+          {
+            color: 'blue',
+            width: '200px'
+          },
+          {
+            width: '300px',
+            height: '300px',
+            fontSize: 30
+          }
+        ]
+      }
       expect(mergeProps(props1, props2)).toMatchObject({
-        onClick: [clickHander1, clickHander2],
-        onFocus: focusHander2
+        style: {
+          color: 'blue',
+          width: '300px',
+          height: '300px',
+          fontSize: 30,
+          right: '10',
+          top: '10'
+        }
+      })
+    })
+
+    test('handlers', () => {
+      let clickHandler1 = function() {}
+      let clickHandler2 = function() {}
+      let focusHandler2 = function() {}
+
+      let props1: Data = { onClick: clickHandler1 }
+      let props2: Data = { onClick: clickHandler2, onFocus: focusHandler2 }
+      expect(mergeProps(props1, props2)).toMatchObject({
+        onClick: [clickHandler1, clickHandler2],
+        onFocus: focusHandler2
       })
     })
 
@@ -337,6 +384,27 @@ describe('vnode', () => {
       ]))
       expect(vnode.dynamicChildren).toStrictEqual([vnode1])
     })
+
+    // #1039
+    // <component :is="foo">{{ bar }}</component>
+    // - content is compiled as slot
+    // - dynamic component resolves to plain element, but as a block
+    // - block creation disables its own tracking, accidentally causing the
+    //   slot content (called during the block node creation) to be missed
+    test('element block should track normalized slot children', () => {
+      const hoist = createVNode('div')
+      let vnode1
+      const vnode = (openBlock(),
+      createBlock('div', null, {
+        default: () => {
+          return [
+            hoist,
+            (vnode1 = createVNode('div', null, 'text', PatchFlags.TEXT))
+          ]
+        }
+      }))
+      expect(vnode.dynamicChildren).toStrictEqual([vnode1])
+    })
   })
 
   describe('transformVNodeArgs', () => {
@@ -385,6 +453,13 @@ describe('vnode', () => {
       const root = nodeOps.createElement('div')
       createApp(App).mount(root)
       expect(serializeInner(root)).toBe('<h1>Root Component</h1>')
+    })
+
+    test('should not be observable', () => {
+      const a = createVNode('div')
+      const b = reactive(a)
+      expect(b).toBe(a)
+      expect(isReactive(b)).toBe(false)
     })
   })
 })
