@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+<script src="../../packages/vue/dist/vue.global.js"></script>
+
+<div id="demo"></div>
+      
+<script>
+
+function timeout(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchData() {
+    await timeout(3000);
+    // uncomment the line below for error capturing
+    // throw new Error("UPS! There was an error.");
+    return {
+        name: "Mesut",
+        age: 25
+    };
+}
+const { createApp, onErrorCaptured, ref } = Vue
+const User = {
+    async setup() {
+        const user = await fetchData();
+        return { user };
+    },
+    template: `<div>
+        Loaded User: 
+        {{ user }}    
+    </div>`
+};
+
+const main = {
+    components: {
+        User
+    },
+    setup() {
+        const error = ref(null);
+        onErrorCaptured(e => {
+            error.value = e;
+            return true;
+        });
+        return { error };
+    },
+    template:`
+        <h1>Vue 3 - Suspense</h1>
+        <div v-if="error">
+            {{ error }}
+        </div>
+        <Suspense v-else>
+            <template #default>
+                <user />
+            </template>
+            <template #fallback>
+                <div>Loading... (3 seconds)</div>
+            </template>
+        </Suspense>
+    `
+}
+
+let app = createApp(main).mount('#demo')
+
+
+</script>
+
+
+</body>
+</html>
