@@ -7,6 +7,7 @@ import {
   shallowReadonly
 } from '@vue/reactivity'
 import {
+  CreateComponentPublicInstance,
   ComponentPublicInstance,
   PublicInstanceProxyHandlers,
   RuntimeCompiledPublicInstanceProxyHandlers,
@@ -14,7 +15,11 @@ import {
   exposePropsOnRenderContext,
   exposeSetupStateOnRenderContext
 } from './componentProxy'
-import { ComponentPropsOptions, initProps } from './componentProps'
+import {
+  ComponentPropsOptions,
+  NormalizedPropsOptions,
+  initProps
+} from './componentProps'
 import { Slots, initSlots, InternalSlots } from './componentSlots'
 import { warn } from './warning'
 import { ErrorCodes, callWithErrorHandling } from './errorHandling'
@@ -49,7 +54,11 @@ export type Data = { [key: string]: unknown }
 
 // Note: can't mark this whole interface internal because some public interfaces
 // extend it.
-export interface SFCInternalOptions {
+export interface ComponentInternalOptions {
+  /**
+   * @internal
+   */
+  __props?: NormalizedPropsOptions | []
   /**
    * @internal
    */
@@ -63,25 +72,18 @@ export interface SFCInternalOptions {
    */
   __hmrId?: string
   /**
-   * @internal
-   */
-  __hmrUpdated?: boolean
-  /**
    * This one should be exposed so that devtools can make use of it
    */
   __file?: string
 }
 
-export interface FunctionalComponent<
-  P = {},
-  E extends EmitsOptions = Record<string, any>
-> extends SFCInternalOptions {
+export interface FunctionalComponent<P = {}, E extends EmitsOptions = {}>
+  extends ComponentInternalOptions {
   // use of any here is intentional so it can be a valid JSX Element constructor
   (props: P, ctx: SetupContext<E>): any
   props?: ComponentPropsOptions<P>
   emits?: E | (keyof E)[]
   inheritAttrs?: boolean
-  inheritRef?: boolean
   displayName?: string
 }
 
@@ -96,7 +98,15 @@ export type Component = ComponentOptions | FunctionalComponent<any>
 // The constructor type is an artificial type returned by defineComponent().
 export type PublicAPIComponent =
   | Component
-  | { new (...args: any[]): ComponentPublicInstance<any, any, any, any, any> }
+  | {
+      new (...args: any[]): CreateComponentPublicInstance<
+        any,
+        any,
+        any,
+        any,
+        any
+      >
+    }
 
 export { ComponentOptions }
 
@@ -130,7 +140,12 @@ export interface SetupContext<E = ObjectEmitsOptions> {
 export type InternalRenderFunction = {
   (
     ctx: ComponentPublicInstance,
-    cache: ComponentInternalInstance['renderCache']
+    cache: ComponentInternalInstance['renderCache'],
+    // for compiler-optimized bindings
+    $props: ComponentInternalInstance['props'],
+    $setup: ComponentInternalInstance['setupState'],
+    $data: ComponentInternalInstance['data'],
+    $options: ComponentInternalInstance['ctx']
   ): VNodeChild
   _rc?: boolean // isRuntimeCompiled
 }
@@ -308,12 +323,6 @@ export interface ComponentInternalInstance {
    * @internal
    */
   [LifecycleHooks.ERROR_CAPTURED]: LifecycleHook
-
-  /**
-   * hmr marker (dev only)
-   * @internal
-   */
-  renderUpdated?: boolean
 }
 
 const emptyAppContext = createAppContext()
@@ -675,6 +684,7 @@ const classify = (str: string): string =>
   str.replace(classifyRE, c => c.toUpperCase()).replace(/[-_]/g, '')
 
 export function formatComponentName(
+  instance: ComponentInternalInstance | null,
   Component: Component,
   isRoot = false
 ): string {
@@ -687,5 +697,17 @@ export function formatComponentName(
       name = match[1]
     }
   }
+
+  if (!name && instance && instance.parent) {
+    // try to infer the name based on local resolution
+    const registry = instance.parent.components
+    for (const key in registry) {
+      if (registry[key] === Component) {
+        name = key
+        break
+      }
+    }
+  }
+
   return name ? classify(name) : isRoot ? `App` : `Anonymous`
 }

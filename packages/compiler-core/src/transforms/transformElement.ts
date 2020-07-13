@@ -203,7 +203,7 @@ export const transformElement: NodeTransform = (node, context) => {
       vnodeDynamicProps,
       vnodeDirectives,
       !!shouldUseBlock,
-      false /* isForBlock */,
+      false /* disableTracking */,
       node.loc
     )
   }
@@ -280,7 +280,7 @@ export function buildProps(
       if (
         !isComponent &&
         isOn(name) &&
-        // omit the flag for click handlers becaues hydration gives click
+        // omit the flag for click handlers because hydration gives click
         // dedicated fast path.
         name.toLowerCase() !== 'onclick' &&
         // omit v-model handlers

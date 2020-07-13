@@ -12,6 +12,7 @@ import { ComponentInternalInstance } from './component'
 import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
 import { warn } from './warning'
 import { normalizePropsOptions } from './componentProps'
+import { UnionToIntersection } from './helpers/typeUtils'
 
 export type ObjectEmitsOptions = Record<
   string,
@@ -19,24 +20,20 @@ export type ObjectEmitsOptions = Record<
 >
 export type EmitsOptions = ObjectEmitsOptions | string[]
 
-type UnionToIntersection<U> = (U extends any
-  ? (k: U) => void
-  : never) extends ((k: infer I) => void)
-  ? I
-  : never
-
 export type EmitFn<
   Options = ObjectEmitsOptions,
   Event extends keyof Options = keyof Options
 > = Options extends any[]
   ? (event: Options[0], ...args: any[]) => void
-  : UnionToIntersection<
-      {
-        [key in Event]: Options[key] extends ((...args: infer Args) => any)
-          ? (event: key, ...args: Args) => void
-          : (event: key, ...args: any[]) => void
-      }[Event]
-    >
+  : {} extends Options // if the emit is empty object (usually the default value for emit) should be converted to function
+    ? (event: string, ...args: any[]) => void
+    : UnionToIntersection<
+        {
+          [key in Event]: Options[key] extends ((...args: infer Args) => any)
+            ? (event: key, ...args: Args) => void
+            : (event: key, ...args: any[]) => void
+        }[Event]
+      >
 
 export function emit(
   instance: ComponentInternalInstance,
@@ -49,7 +46,7 @@ export function emit(
     const options = normalizeEmitsOptions(instance.type.emits)
     if (options) {
       if (!(event in options)) {
-        const propsOptions = normalizePropsOptions(instance.type.props)[0]
+        const propsOptions = normalizePropsOptions(instance.type)[0]
         if (!propsOptions || !(`on` + capitalize(event) in propsOptions)) {
           warn(
             `Component emitted event "${event}" but it is neither declared in ` +

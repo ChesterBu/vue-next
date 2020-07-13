@@ -1,4 +1,4 @@
-import { ElementNode, Namespace, TemplateChildNode } from './ast'
+import { ElementNode, Namespace, TemplateChildNode, ParentNode } from './ast'
 import { TextModes } from './parse'
 import { CompilerError } from './errors'
 import {
@@ -53,12 +53,17 @@ export interface ParserOptions {
 
 export type HoistTransform = (
   children: TemplateChildNode[],
-  context: TransformContext
+  context: TransformContext,
+  parent: ParentNode
 ) => void
+
+export interface BindingMetadata {
+  [key: string]: 'data' | 'props' | 'setup' | 'options'
+}
 
 export interface TransformOptions {
   /**
-   * An array of node trasnforms to be applied to every AST node.
+   * An array of node transforms to be applied to every AST node.
    */
   nodeTransforms?: NodeTransform[]
   /**
@@ -117,10 +122,20 @@ export interface TransformOptions {
   scopeId?: string | null
   /**
    * Generate SSR-optimized render functions instead.
-   * The resulting funciton must be attached to the component via the
+   * The resulting function must be attached to the component via the
    * `ssrRender` option instead of `render`.
    */
   ssr?: boolean
+  /**
+   * SFC <style vars> injection string
+   * needed to render inline CSS variables on component root
+   */
+  ssrCssVars?: string
+  /**
+   * Optional binding metadata analyzed from script - used to optimize
+   * binding access when `prefixIdentifiers` is enabled.
+   */
+  bindingMetadata?: BindingMetadata
   onError?: (error: CompilerError) => void
 }
 
@@ -154,7 +169,7 @@ export interface CodegenOptions {
    * (only used for webpack code-split)
    * @default false
    */
-  optimizeBindings?: boolean
+  optimizeImports?: boolean
   /**
    * Customize where to import runtime helpers from.
    * @default 'vue'
@@ -168,6 +183,7 @@ export interface CodegenOptions {
   runtimeGlobalName?: string
   // we need to know this during codegen to generate proper preambles
   prefixIdentifiers?: boolean
+  bindingMetadata?: BindingMetadata
   // generate ssr-specific code?
   ssr?: boolean
 }

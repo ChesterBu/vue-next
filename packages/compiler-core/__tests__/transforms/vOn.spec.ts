@@ -13,7 +13,7 @@ import { transformElement } from '../../src/transforms/transformElement'
 import { transformExpression } from '../../src/transforms/transformExpression'
 
 function parseWithVOn(template: string, options: CompilerOptions = {}) {
-  const ast = parse(template)
+  const ast = parse(template, options)
   transform(ast, {
     nodeTransforms: [transformExpression, transformElement],
     directiveTransforms: {
@@ -161,6 +161,24 @@ describe('compiler: transform v-on', () => {
             // in this case the return value is discarded and the behavior is
             // consistent with 2.x
             children: [`$event => {`, { content: `foo();bar()` }, `}`]
+          }
+        }
+      ]
+    })
+  })
+
+  test('should handle multi-line statement', () => {
+    const { node } = parseWithVOn(`<div @click="\nfoo();\nbar()\n"/>`)
+    expect((node.codegenNode as VNodeCall).props).toMatchObject({
+      properties: [
+        {
+          key: { content: `onClick` },
+          value: {
+            type: NodeTypes.COMPOUND_EXPRESSION,
+            // should wrap with `{` for multiple statements
+            // in this case the return value is discarded and the behavior is
+            // consistent with 2.x
+            children: [`$event => {`, { content: `\nfoo();\nbar()\n` }, `}`]
           }
         }
       ]
@@ -382,9 +400,18 @@ describe('compiler: transform v-on', () => {
         index: 1,
         value: {
           type: NodeTypes.COMPOUND_EXPRESSION,
-          children: [`$event => (`, { content: `_ctx.foo($event)` }, `)`]
+          children: [`(...args) => (`, { content: `_ctx.foo(...args)` }, `)`]
         }
       })
+    })
+
+    test('bail on component member expression handler', () => {
+      const { root } = parseWithVOn(`<comp v-on:click="foo" />`, {
+        prefixIdentifiers: true,
+        cacheHandlers: true,
+        isNativeTag: tag => tag === 'div'
+      })
+      expect(root.cached).toBe(0)
     })
 
     test('inline function expression handler', () => {
