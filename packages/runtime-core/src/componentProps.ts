@@ -80,7 +80,7 @@ type InferPropType<T> = T extends null
   : T extends { type: null | true }
     ? any // As TS issue https://github.com/Microsoft/TypeScript/issues/14829 // somehow `ObjectConstructor` when inferred from { (): T } becomes `any` // `BooleanConstructor` when inferred from PropConstructor(with PropMethod) becomes `Boolean`
     : T extends ObjectConstructor | { type: ObjectConstructor }
-      ? { [key: string]: any }
+      ? Record<string, any>
       : T extends BooleanConstructor | { type: BooleanConstructor }
         ? boolean
         : T extends Prop<infer V> ? V : T
@@ -242,8 +242,6 @@ function setFullProps(
   attrs: Data
 ) {
   const [options, needCastKeys] = normalizePropsOptions(instance.type)
-  const emits = instance.type.emits
-
   if (rawProps) {
     for (const key in rawProps) {
       const value = rawProps[key]
@@ -256,7 +254,7 @@ function setFullProps(
       let camelKey
       if (options && hasOwn(options, (camelKey = camelize(key)))) {
         props[camelKey] = value
-      } else if (!emits || !isEmitListener(emits, key)) {
+      } else if (!isEmitListener(instance.type, key)) {
         // Any non-declared (either as a prop or an emitted event) props are put
         // into a separate `attrs` object for spreading. Make sure to preserve
         // original key casing

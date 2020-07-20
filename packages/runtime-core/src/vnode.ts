@@ -8,7 +8,8 @@ import {
   normalizeClass,
   normalizeStyle,
   PatchFlags,
-  ShapeFlags
+  ShapeFlags,
+  SlotFlags
 } from '@vue/shared'
 import {
   ComponentInternalInstance,
@@ -70,8 +71,8 @@ export type VNodeHook =
   | VNodeMountHook[]
   | VNodeUpdateHook[]
 
-export interface VNodeProps {
-  [key: string]: any
+// https://github.com/microsoft/TypeScript/issues/33099
+export type VNodeProps = {
   key?: string | number
   ref?: VNodeRef
 
@@ -93,8 +94,7 @@ type VNodeChildAtom =
   | undefined
   | void
 
-export interface VNodeArrayChildren
-  extends Array<VNodeArrayChildren | VNodeChildAtom> {}
+export type VNodeArrayChildren = Array<VNodeArrayChildren | VNodeChildAtom>
 
 export type VNodeChild = VNodeChildAtom | VNodeArrayChildren
 
@@ -104,7 +104,11 @@ export type VNodeNormalizedChildren =
   | RawSlots
   | null
 
-export interface VNode<HostNode = RendererNode, HostElement = RendererElement> {
+export interface VNode<
+  HostNode = RendererNode,
+  HostElement = RendererElement,
+  ExtraProps = { [key: string]: any }
+> {
   /**
    * @internal
    */
@@ -114,7 +118,7 @@ export interface VNode<HostNode = RendererNode, HostElement = RendererElement> {
    */
   __v_skip: true
   type: VNodeTypes
-  props: VNodeProps | null
+  props: (VNodeProps & ExtraProps) | null
   key: string | number | null
   ref: VNodeNormalizedRef | null
   scopeId: string | null // SFC only
@@ -204,7 +208,7 @@ export function setBlockTracking(value: number) {
  */
 export function createBlock(
   type: VNodeTypes | ClassComponent,
-  props?: { [key: string]: any } | null,
+  props?: Record<string, any> | null,
   children?: any,
   patchFlag?: number,
   dynamicProps?: string[]
@@ -543,10 +547,22 @@ export function normalizeChildren(vnode: VNode, children: unknown) {
       return
     } else {
       type = ShapeFlags.SLOTS_CHILDREN
-      if (!(children as RawSlots)._ && !(InternalObjectKey in children!)) {
+      const slotFlag = (children as RawSlots)._
+      if (!slotFlag && !(InternalObjectKey in children!)) {
         // if slots are not normalized, attach context instance
         // (compiled / normalized slots already have context)
         ;(children as RawSlots)._ctx = currentRenderingInstance
+      } else if (slotFlag === SlotFlags.FORWARDED && currentRenderingInstance) {
+        // a child component receives forwarded slots from the parent.
+        // its slot type is determined by its parent's slot type.
+        if (
+          currentRenderingInstance.vnode.patchFlag & PatchFlags.DYNAMIC_SLOTS
+        ) {
+          ;(children as RawSlots)._ = SlotFlags.DYNAMIC
+          vnode.patchFlag |= PatchFlags.DYNAMIC_SLOTS
+        } else {
+          ;(children as RawSlots)._ = SlotFlags.STABLE
+        }
       }
     }
   } else if (isFunction(children)) {
@@ -585,7 +601,7 @@ export function mergeProps(...args: (Data & VNodeProps)[]) {
         const incoming = toMerge[key]
         if (existing !== incoming) {
           ret[key] = existing
-            ? [].concat(existing as any, toMerge[key])
+            ? [].concat(existing as any, toMerge[key] as any)
             : incoming
         }
       } else {

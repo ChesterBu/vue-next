@@ -49,8 +49,22 @@ import {
   markAttrsAccessed
 } from './componentRenderUtils'
 import { startMeasure, endMeasure } from './profiling'
+import { componentAdded } from './devtools'
 
-export type Data = { [key: string]: unknown }
+export type Data = Record<string, unknown>
+
+/**
+ * For extending allowed non-declared props on components in TSX
+ */
+export interface ComponentCustomProps {}
+
+/**
+ * Default allowed non-declared props on ocmponent in TSX
+ */
+export interface AllowedComponentProps {
+  class?: unknown
+  style?: unknown
+}
 
 // Note: can't mark this whole interface internal because some public interfaces
 // extend it.
@@ -59,6 +73,10 @@ export interface ComponentInternalOptions {
    * @internal
    */
   __props?: NormalizedPropsOptions | []
+  /**
+   * @internal
+   */
+  __emits?: ObjectEmitsOptions
   /**
    * @internal
    */
@@ -128,7 +146,7 @@ export const enum LifecycleHooks {
   ERROR_CAPTURED = 'ec'
 }
 
-export interface SetupContext<E = ObjectEmitsOptions> {
+export interface SetupContext<E = EmitsOptions> {
   attrs: Data
   slots: Slots
   emit: EmitFn<E>
@@ -242,6 +260,8 @@ export interface ComponentInternalInstance {
   slots: InternalSlots
   refs: Data
   emit: EmitFn
+  // used for keeping track of .once event handlers on components
+  emitted: Record<string, boolean> | null
 
   /**
    * setup related
@@ -392,7 +412,8 @@ export function createComponentInstance(
     rtg: null,
     rtc: null,
     ec: null,
-    emit: null as any // to be set immediately
+    emit: null as any, // to be set immediately
+    emitted: null
   }
   if (__DEV__) {
     instance.ctx = createRenderContext(instance)
@@ -401,6 +422,9 @@ export function createComponentInstance(
   }
   instance.root = parent ? parent.root : instance
   instance.emit = emit.bind(null, instance)
+
+  __DEV__ && componentAdded(instance)
+
   return instance
 }
 
@@ -683,6 +707,7 @@ const classifyRE = /(?:^|[-_])(\w)/g
 const classify = (str: string): string =>
   str.replace(classifyRE, c => c.toUpperCase()).replace(/[-_]/g, '')
 
+/* istanbul ignore next */
 export function formatComponentName(
   instance: ComponentInternalInstance | null,
   Component: Component,

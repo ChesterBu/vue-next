@@ -6,7 +6,9 @@ import {
   CompilerOptions,
   ErrorCodes,
   NodeTypes,
-  VNodeCall
+  VNodeCall,
+  helperNameMap,
+  CAPITALIZE
 } from '../../src'
 import { transformOn } from '../../src/transforms/vOn'
 import { transformElement } from '../../src/transforms/transformElement'
@@ -73,7 +75,11 @@ describe('compiler: transform v-on', () => {
         {
           key: {
             type: NodeTypes.COMPOUND_EXPRESSION,
-            children: [`"on" + (`, { content: `event` }, `)`]
+            children: [
+              `"on" + _${helperNameMap[CAPITALIZE]}(`,
+              { content: `event` },
+              `)`
+            ]
           },
           value: {
             type: NodeTypes.SIMPLE_EXPRESSION,
@@ -94,7 +100,11 @@ describe('compiler: transform v-on', () => {
         {
           key: {
             type: NodeTypes.COMPOUND_EXPRESSION,
-            children: [`"on" + (`, { content: `_ctx.event` }, `)`]
+            children: [
+              `"on" + _${helperNameMap[CAPITALIZE]}(`,
+              { content: `_ctx.event` },
+              `)`
+            ]
           },
           value: {
             type: NodeTypes.SIMPLE_EXPRESSION,
@@ -116,7 +126,7 @@ describe('compiler: transform v-on', () => {
           key: {
             type: NodeTypes.COMPOUND_EXPRESSION,
             children: [
-              `"on" + (`,
+              `"on" + _${helperNameMap[CAPITALIZE]}(`,
               { content: `_ctx.event` },
               `(`,
               { content: `_ctx.foo` },
@@ -255,6 +265,56 @@ describe('compiler: transform v-on', () => {
           value: {
             type: NodeTypes.SIMPLE_EXPRESSION,
             content: `$event => foo($event)`
+          }
+        }
+      ]
+    })
+  })
+
+  test('should NOT wrap as function if expression is already function expression (with newlines)', () => {
+    const { node } = parseWithVOn(
+      `<div @click="
+      $event => {
+        foo($event)
+      }
+    "/>`
+    )
+    expect((node.codegenNode as VNodeCall).props).toMatchObject({
+      properties: [
+        {
+          key: { content: `onClick` },
+          value: {
+            type: NodeTypes.SIMPLE_EXPRESSION,
+            content: `
+      $event => {
+        foo($event)
+      }
+    `
+          }
+        }
+      ]
+    })
+  })
+
+  test('should NOT wrap as function if expression is already function expression (with newlines + function keyword)', () => {
+    const { node } = parseWithVOn(
+      `<div @click="
+      function($event) {
+        foo($event)
+      }
+    "/>`
+    )
+    expect((node.codegenNode as VNodeCall).props).toMatchObject({
+      properties: [
+        {
+          key: { content: `onClick` },
+          value: {
+            type: NodeTypes.SIMPLE_EXPRESSION,
+            content: `
+      function($event) {
+        foo($event)
+      }
+    `
           }
         }
       ]
