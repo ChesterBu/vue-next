@@ -1,10 +1,10 @@
 import { VNode, VNodeChild, isVNode } from './vnode'
 import {
-  reactive,
   ReactiveEffect,
   pauseTracking,
   resetTracking,
-  shallowReadonly
+  shallowReadonly,
+  proxyRefs
 } from '@vue/reactivity'
 import {
   CreateComponentPublicInstance,
@@ -548,7 +548,7 @@ export function handleSetupResult(
     }
     // setup returned bindings.
     // assuming a render function compiled from template is present.
-    instance.setupState = reactive(setupResult)
+    instance.setupState = proxyRefs(setupResult)
     if (__DEV__) {
       exposeSetupStateOnRenderContext(instance)
     }
@@ -601,8 +601,6 @@ function finishComponentSetup(
       if (__DEV__) {
         endMeasure(instance, `compile`)
       }
-      // mark the function as runtime compiled
-      ;(Component.render as InternalRenderFunction)._rc = true
     }
 
     instance.render = (Component.render || NOOP) as InternalRenderFunction
