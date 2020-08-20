@@ -10,29 +10,66 @@
     <div id="app"></div>
     <script src="../../packages/vue/dist/vue.global.js"></script>
     <script>
-        const { createApp,ref,onMounted,h } = Vue
-        const Comp = {
-            template: `<button style='color:red' @Click='add'>
-                            {{a.c}}
-                        </button>`,
-            setup(){
-                const a = ref({
-                    c:1
+        const { createApp,ref,onMounted,h, watch,getCurrentInstance,reactive } = Vue
+
+        const abc = {
+            template: `<div style='color:red'>
+                            1111 {{ ccd }}
+                            2222 {{ dd }}
+                        </div>`,
+            setup(props, { attrs }){
+                let instance = getCurrentInstance()
+                watch(attrs.c,()=>{
+                    console.log('c', instance)
                 })
-                function add (){
-                    console.log(a.value.c)
-                }
-                onMounted(() => {
-                    console.log(a.c)
+                watch(() => attrs.d,()=>{
+                    console.log('d', instance)
                 })
+                watch(attrs.a,()=>{
+                    console.log('a', instance)
+                })
+                window.ins= instance
                 return {
-                    a,
-                    add
+                    ccd: attrs.c,
+                    dd: attrs.d
                 }
             }
         }
-        debugger
-        createApp(Comp).mount('#app')
+
+        const Comp = {
+            template: `<button style='color:red' @Click='add'>
+                            {{ a.c }}
+                        </button><br/>
+                        <abc :c='a.c' :d='d' :a='a'/>
+                        `,
+            components:{
+                abc,
+            },
+            setup(){
+                const a = reactive({
+                    c:[]
+                })
+                let i = 0
+
+                let d = ref([])
+                function add (){
+                    a.c = [i]
+                    d.value = [i]
+                    // d.value.push(i)  这样可以
+                    console.log(111)
+                    i++
+                }
+                return {
+                    a,
+                    add,
+                    d
+                }
+            }
+        }
+
+        
+
+        let app = createApp(Comp).mount('#app')
         // createApp().mount(function(){
         //     return h('button',{
         //         style:{
