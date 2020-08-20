@@ -10,19 +10,23 @@
     <div id="app"></div>
     <script src="../../packages/vue/dist/vue.global.js"></script>
     <script>
-        const { createApp,ref,onMounted,h, watch,getCurrentInstance,reactive } = Vue
+        const { createApp,ref,onMounted,h, watch,getCurrentInstance,reactive,computed } = Vue
 
         const abc = {
             template: `<div style='color:red'>
                             1111 {{ ccd }}
                             2222 {{ dd }}
                         </div>`,
+            props:{
+                d: Array,
+                c: Array
+            },
             setup(props, { attrs }){
                 let instance = getCurrentInstance()
-                watch(attrs.c,()=>{
+                watch(() => props.c,()=>{
                     console.log('c', instance)
                 })
-                watch(() => attrs.d,()=>{
+                watch(() => props.d,()=>{
                     console.log('d', instance)
                 })
                 watch(attrs.a,()=>{
@@ -40,20 +44,29 @@
             template: `<button style='color:red' @Click='add'>
                             {{ a.c }}
                         </button><br/>
-                        <abc :c='a.c' :d='d' :a='a'/>
+                        <abc :c='dc' :d='d' :a='a'/>
                         `,
             components:{
                 abc,
             },
+            data () {
+                return { 
+                    dc:[]
+                }
+            },
+            mounted(){
+                let i = 1
+                setInterval(()=> this.dc = [++i], 1000)
+            },
             setup(){
                 const a = reactive({
-                    c:[]
+                    c:1
                 })
                 let i = 0
 
                 let d = ref([])
                 function add (){
-                    a.c = [i]
+                    a.c = i
                     d.value = [i]
                     // d.value.push(i)  这样可以
                     console.log(111)
