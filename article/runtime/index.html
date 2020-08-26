@@ -45,13 +45,16 @@
                             {{ a.c }}
                         </button><br/>
                         <abc :c='dc' :d='d' :a='a'/>
+                        <input v-model="ad">
+                        {{ ad }}
                         `,
             components:{
                 abc,
             },
             data () {
                 return { 
-                    dc:[]
+                    dc:[],
+                    ad:''
                 }
             },
             mounted(){
