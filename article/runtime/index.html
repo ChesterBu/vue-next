@@ -57,9 +57,17 @@
                     ad:''
                 }
             },
+            watch:{
+                dc(){
+                    console.log('watch', this.dc)
+                }
+            },
             mounted(){
                 let i = 1
-                setInterval(()=> this.dc = [++i], 1000)
+                setInterval(()=>{
+                    console.log(123)
+                     this.dc.push(i++)
+                }, 1000)
             },
             setup(){
                 const a = reactive({
